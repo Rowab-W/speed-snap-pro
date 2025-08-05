@@ -24,6 +24,7 @@ interface DataPoint {
 
 const SpeedSnap: React.FC = () => {
   const [isRunning, setIsRunning] = useState(false);
+  const [waitingForAcceleration, setWaitingForAcceleration] = useState(false);
   const [speed, setSpeed] = useState(0);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [distance, setDistance] = useState(0);
@@ -38,7 +39,6 @@ const SpeedSnap: React.FC = () => {
   });
   const [dataPoints, setDataPoints] = useState<DataPoint[]>([]);
   const [hasResults, setHasResults] = useState(false);
-  const [manualStop, setManualStop] = useState(false);
 
   const startTimeRef = useRef<number | null>(null);
   const watchIdRef = useRef<number | null>(null);
@@ -102,24 +102,25 @@ const SpeedSnap: React.FC = () => {
     ekfRef.current = new ExtendedKalmanFilter();
   }, []);
 
-  // Check for acceleration to auto-start
+  // Check for acceleration to trigger actual measurement
   const checkAcceleration = useCallback(() => {
     const { x, y, z } = accelerometerRef.current;
     const magnitude = Math.sqrt(x * x + y * y + z * z);
     
-    if (magnitude > 2 && !isRunning && speed < 5 && !manualStop) {
-      startMeasurement();
+    // Only start measurement if we're waiting for acceleration and conditions are met
+    if (magnitude > 2 && waitingForAcceleration && speed < 5) {
+      startActualMeasurement();
     }
-  }, [isRunning, speed, manualStop]);
+  }, [waitingForAcceleration, speed]);
 
-  // Start measurement
+  // Prepare for measurement (called when START button is pressed)
   const startMeasurement = useCallback(() => {
-    if (isRunning) return;
+    if (isRunning || waitingForAcceleration) return;
 
-    setIsRunning(true);
+    setWaitingForAcceleration(true);
+    setSpeed(0);
     setElapsedTime(0);
     setDistance(0);
-    setSpeed(0);
     setDataPoints([]);
     setTimes({
       '0-100': null,
@@ -130,13 +131,54 @@ const SpeedSnap: React.FC = () => {
       halfMile: null,
     });
     setHasResults(false);
-    setStatus('Measuring...');
+    setStatus('Waiting for acceleration... (>2 m/s²)');
 
+    // Start GPS tracking to monitor speed
+    if (navigator.geolocation) {
+      watchIdRef.current = navigator.geolocation.watchPosition(
+        (position) => {
+          const speedMs = position.coords.speed || 0;
+          const speedKmh = speedMs * 3.6;
+          setSpeed(speedKmh);
+        },
+        (error) => {
+          setStatus(`GPS error: ${error.message}`);
+          setWaitingForAcceleration(false);
+          toast({
+            title: "GPS Error",
+            description: error.message,
+            variant: "destructive",
+          });
+        },
+        {
+          enableHighAccuracy: true,
+          maximumAge: 0,
+          timeout: 5000,
+        }
+      );
+    }
+
+    toast({
+      title: "Ready to Start",
+      description: "Accelerate to begin measurement (>2 m/s² from <5 km/h)",
+    });
+  }, [isRunning, waitingForAcceleration]);
+
+  // Start actual measurement (called when acceleration is detected)
+  const startActualMeasurement = useCallback(() => {
+    setWaitingForAcceleration(false);
+    setIsRunning(true);
+    setStatus('Measuring...');
+    
     startTimeRef.current = performance.now();
     lastTimestampRef.current = null;
     ekfRef.current = new ExtendedKalmanFilter();
 
-    // Start GPS tracking
+    // Continue with existing GPS tracking but now for measurement
+    if (watchIdRef.current) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+    }
+
     if (navigator.geolocation) {
       watchIdRef.current = navigator.geolocation.watchPosition(
         handlePosition,
@@ -158,10 +200,10 @@ const SpeedSnap: React.FC = () => {
     }
 
     toast({
-      title: "Measurement Started",
-      description: "SpeedSnap is now tracking your acceleration",
+      title: "Measurement Started!",
+      description: "Tracking your acceleration now",
     });
-  }, [isRunning]);
+  }, []);
 
   // Handle GPS position updates
   const handlePosition = useCallback((position: GeolocationPosition) => {
@@ -258,10 +300,10 @@ const SpeedSnap: React.FC = () => {
 
   // Stop measurement
   const stopMeasurement = useCallback(() => {
-    if (!isRunning) return;
+    if (!isRunning && !waitingForAcceleration) return;
 
     setIsRunning(false);
-    setManualStop(true); // Prevent auto-restart
+    setWaitingForAcceleration(false);
     setStatus('Processing results...');
 
     if (watchIdRef.current) {
@@ -307,11 +349,11 @@ const SpeedSnap: React.FC = () => {
       title: "Measurement Complete",
       description: "Check your results below!",
     });
-  }, [isRunning, dataPoints]);
+  }, [isRunning, waitingForAcceleration, dataPoints]);
 
   // Reset all data
   const resetMeasurement = useCallback(() => {
-    if (isRunning) {
+    if (isRunning || waitingForAcceleration) {
       stopMeasurement();
     }
     
@@ -319,7 +361,7 @@ const SpeedSnap: React.FC = () => {
     setElapsedTime(0);
     setDistance(0);
     setDataPoints([]);
-    setManualStop(false); // Allow auto-start again
+    setWaitingForAcceleration(false);
     setTimes({
       '0-100': null,
       '0-200': null,
@@ -335,7 +377,7 @@ const SpeedSnap: React.FC = () => {
       title: "Reset Complete",
       description: "Ready for next measurement",
     });
-  }, [isRunning, stopMeasurement]);
+  }, [isRunning, waitingForAcceleration, stopMeasurement]);
 
   // Export results
   const exportResults = useCallback(() => {
@@ -403,12 +445,12 @@ const SpeedSnap: React.FC = () => {
         {/* Control Buttons */}
         <div className="flex gap-3">
           <Button
-            onClick={isRunning ? stopMeasurement : startMeasurement}
-            variant={isRunning ? "destructive" : "default"}
+            onClick={(isRunning || waitingForAcceleration) ? stopMeasurement : startMeasurement}
+            variant={(isRunning || waitingForAcceleration) ? "destructive" : "default"}
             className="flex-1 h-12 text-lg font-semibold"
             disabled={status.includes('❌') || status.includes('Requesting')}
           >
-            {isRunning ? (
+            {(isRunning || waitingForAcceleration) ? (
               <>
                 <Square className="w-5 h-5 mr-2" />
                 Stop
