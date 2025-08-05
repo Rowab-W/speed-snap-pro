@@ -365,7 +365,7 @@ const SpeedSnap: React.FC = () => {
               SpeedSnap
             </h1>
           </div>
-          <p className="text-muted-foreground">Professional 0-100 km/h Timer</p>
+          <p className="text-muted-foreground">Professional Acceleration Timer</p>
         </div>
 
         {/* Main Display Card */}
