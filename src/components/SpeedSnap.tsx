@@ -403,7 +403,7 @@ const SpeedSnap: React.FC = () => {
             onClick={isRunning ? stopMeasurement : startMeasurement}
             variant={isRunning ? "destructive" : "default"}
             className="flex-1 h-12 text-lg font-semibold"
-            disabled={status.includes('error') || status.includes('Requesting')}
+            disabled={status.includes('❌') || status.includes('Requesting')}
           >
             {isRunning ? (
               <>
