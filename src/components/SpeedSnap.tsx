@@ -166,6 +166,12 @@ const SpeedSnap: React.FC = () => {
   const handlePosition = useCallback((position: GeolocationPosition) => {
     if (!isRunning || !startTimeRef.current || !ekfRef.current) return;
 
+    console.log('GPS Position:', {
+      speed: position.coords.speed,
+      accuracy: position.coords.accuracy,
+      timestamp: position.timestamp
+    });
+
     const speedMs = position.coords.speed || 0;
     const speedKmh = speedMs * 3.6;
     const timestamp = position.timestamp;
@@ -185,6 +191,12 @@ const SpeedSnap: React.FC = () => {
     
     ekfRef.current.predict(dt);
     const fusedSpeed = ekfRef.current.update([speedKmh, accelMagnitude]);
+
+    console.log('Speed data:', {
+      rawSpeedKmh: speedKmh,
+      fusedSpeed: fusedSpeed,
+      accelMagnitude: accelMagnitude
+    });
 
     setSpeed(fusedSpeed);
     setElapsedTime(elapsed);
