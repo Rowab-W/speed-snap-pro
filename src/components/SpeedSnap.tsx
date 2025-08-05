@@ -75,7 +75,10 @@ const SpeedSnap: React.FC = () => {
                 y: event.acceleration.y || 0,
                 z: event.acceleration.z || 0,
               };
-              checkAcceleration();
+              // Only check acceleration if we're waiting for it after pressing START
+              if (waitingForAcceleration) {
+                checkAcceleration();
+              }
             }
           };
 
@@ -100,7 +103,7 @@ const SpeedSnap: React.FC = () => {
 
     initializeSensors();
     ekfRef.current = new ExtendedKalmanFilter();
-  }, []);
+  }, [waitingForAcceleration]); // Add dependency so the effect updates when waitingForAcceleration changes
 
   // Check for acceleration to trigger actual measurement
   const checkAcceleration = useCallback(() => {
