@@ -46,6 +46,7 @@ const SpeedSnap: React.FC = () => {
   const ekfRef = useRef<ExtendedKalmanFilter | null>(null);
   const accelerometerRef = useRef<{ x: number; y: number; z: number }>({ x: 0, y: 0, z: 0 });
   const chartRef = useRef<any>(null);
+  const waitingForAccelerationRef = useRef<boolean>(false);
 
   // Initialize sensors and permissions
   useEffect(() => {
@@ -75,9 +76,50 @@ const SpeedSnap: React.FC = () => {
                 y: event.acceleration.y || 0,
                 z: event.acceleration.z || 0,
               };
+              
               // Only check acceleration if we're waiting for it after pressing START
-              if (waitingForAcceleration) {
-                checkAcceleration();
+              if (waitingForAccelerationRef.current) {
+                const { x, y, z } = accelerometerRef.current;
+                const magnitude = Math.sqrt(x * x + y * y + z * z);
+                
+                if (magnitude > 2) {
+                  // Trigger actual measurement start
+                  waitingForAccelerationRef.current = false;
+                  setWaitingForAcceleration(false);
+                  setIsRunning(true);
+                  setStatus('Measuring...');
+                  
+                  startTimeRef.current = performance.now();
+                  lastTimestampRef.current = null;
+                  ekfRef.current = new ExtendedKalmanFilter();
+
+                  // Clear existing GPS watch and start measurement tracking
+                  if (watchIdRef.current) {
+                    navigator.geolocation.clearWatch(watchIdRef.current);
+                  }
+
+                  if (navigator.geolocation) {
+                    watchIdRef.current = navigator.geolocation.watchPosition(
+                      handlePosition,
+                      (error) => {
+                        setStatus(`GPS error: ${error.message}`);
+                        setIsRunning(false);
+                        setWaitingForAcceleration(false);
+                        waitingForAccelerationRef.current = false;
+                      },
+                      {
+                        enableHighAccuracy: true,
+                        maximumAge: 0,
+                        timeout: 5000,
+                      }
+                    );
+                  }
+
+                  toast({
+                    title: "Measurement Started!",
+                    description: "Tracking your acceleration now",
+                  });
+                }
               }
             }
           };
@@ -103,7 +145,7 @@ const SpeedSnap: React.FC = () => {
 
     initializeSensors();
     ekfRef.current = new ExtendedKalmanFilter();
-  }, [waitingForAcceleration]); // Add dependency so the effect updates when waitingForAcceleration changes
+  }, []); // Remove dependency to prevent re-initialization
 
   // Check for acceleration to trigger actual measurement
   const checkAcceleration = useCallback(() => {
@@ -121,6 +163,7 @@ const SpeedSnap: React.FC = () => {
     if (isRunning || waitingForAcceleration) return;
 
     setWaitingForAcceleration(true);
+    waitingForAccelerationRef.current = true; // Update ref as well
     setSpeed(0);
     setElapsedTime(0);
     setDistance(0);
@@ -365,6 +408,7 @@ const SpeedSnap: React.FC = () => {
     setDistance(0);
     setDataPoints([]);
     setWaitingForAcceleration(false);
+    waitingForAccelerationRef.current = false; // Reset ref as well
     setTimes({
       '0-100': null,
       '0-200': null,
