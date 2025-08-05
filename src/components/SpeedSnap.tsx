@@ -7,6 +7,7 @@ import { toast } from '@/hooks/use-toast';
 import SpeedChart from './SpeedChart';
 import { CubicSpline } from '../utils/CubicSpline';
 import { ExtendedKalmanFilter } from '../utils/ExtendedKalmanFilter';
+import { Motion } from '@capacitor/motion';
 
 interface TimingResults {
   '0-100': number | null;
@@ -67,71 +68,133 @@ const SpeedSnap: React.FC = () => {
           );
         });
 
-        // Initialize accelerometer if available
-        if ('DeviceMotionEvent' in window) {
-          const handleDeviceMotion = (event: DeviceMotionEvent) => {
-            if (event.acceleration) {
-              accelerometerRef.current = {
-                x: event.acceleration.x || 0,
-                y: event.acceleration.y || 0,
-                z: event.acceleration.z || 0,
-              };
+        // Initialize Capacitor Motion sensors for better mobile support
+        try {
+          const motionListener = await Motion.addListener('accel', (event) => {
+            accelerometerRef.current = {
+              x: event.acceleration.x,
+              y: event.acceleration.y,
+              z: event.acceleration.z,
+            };
+            
+            // Only check acceleration if we're waiting for it after pressing START
+            if (waitingForAccelerationRef.current) {
+              const { x, y, z } = accelerometerRef.current;
+              const magnitude = Math.sqrt(x * x + y * y + z * z);
               
-              // Only check acceleration if we're waiting for it after pressing START
-              if (waitingForAccelerationRef.current) {
-                const { x, y, z } = accelerometerRef.current;
-                const magnitude = Math.sqrt(x * x + y * y + z * z);
+              if (magnitude > 2) {
+                // Trigger actual measurement start
+                waitingForAccelerationRef.current = false;
+                setWaitingForAcceleration(false);
+                setIsRunning(true);
+                setStatus('Measuring...');
                 
-                if (magnitude > 2) {
-                  // Trigger actual measurement start
-                  waitingForAccelerationRef.current = false;
-                  setWaitingForAcceleration(false);
-                  setIsRunning(true);
-                  setStatus('Measuring...');
-                  
-                  startTimeRef.current = performance.now();
-                  lastTimestampRef.current = null;
-                  ekfRef.current = new ExtendedKalmanFilter();
+                startTimeRef.current = performance.now();
+                lastTimestampRef.current = null;
+                ekfRef.current = new ExtendedKalmanFilter();
 
-                  // Clear existing GPS watch and start measurement tracking
-                  if (watchIdRef.current) {
-                    navigator.geolocation.clearWatch(watchIdRef.current);
-                  }
-
-                  if (navigator.geolocation) {
-                    watchIdRef.current = navigator.geolocation.watchPosition(
-                      handlePosition,
-                      (error) => {
-                        setStatus(`GPS error: ${error.message}`);
-                        setIsRunning(false);
-                        setWaitingForAcceleration(false);
-                        waitingForAccelerationRef.current = false;
-                      },
-                      {
-                        enableHighAccuracy: true,
-                        maximumAge: 0,
-                        timeout: 5000,
-                      }
-                    );
-                  }
-
-                  toast({
-                    title: "Measurement Started!",
-                    description: "Tracking your acceleration now",
-                  });
+                // Clear existing GPS watch and start measurement tracking
+                if (watchIdRef.current) {
+                  navigator.geolocation.clearWatch(watchIdRef.current);
                 }
+
+                if (navigator.geolocation) {
+                  watchIdRef.current = navigator.geolocation.watchPosition(
+                    handlePosition,
+                    (error) => {
+                      setStatus(`GPS error: ${error.message}`);
+                      setIsRunning(false);
+                      setWaitingForAcceleration(false);
+                      waitingForAccelerationRef.current = false;
+                    },
+                    {
+                      enableHighAccuracy: true,
+                      maximumAge: 0,
+                      timeout: 5000,
+                    }
+                  );
+                }
+
+                toast({
+                  title: "Measurement Started!",
+                  description: "Tracking your acceleration now",
+                });
               }
             }
-          };
-
-          window.addEventListener('devicemotion', handleDeviceMotion);
-          setStatus(prev => prev + ' Motion sensors active.');
+          });
+          
+          setStatus(prev => prev + ' ✅ Capacitor Motion sensors active.');
           
           return () => {
-            window.removeEventListener('devicemotion', handleDeviceMotion);
+            motionListener.remove();
           };
-        } else {
-          setStatus(prev => prev + ' Motion sensors not supported. Using GPS only.');
+        } catch (error) {
+          // Fallback to browser motion events if Capacitor is not available
+          if ('DeviceMotionEvent' in window) {
+            const handleDeviceMotion = (event: DeviceMotionEvent) => {
+              if (event.acceleration) {
+                accelerometerRef.current = {
+                  x: event.acceleration.x || 0,
+                  y: event.acceleration.y || 0,
+                  z: event.acceleration.z || 0,
+                };
+                
+                // Only check acceleration if we're waiting for it after pressing START
+                if (waitingForAccelerationRef.current) {
+                  const { x, y, z } = accelerometerRef.current;
+                  const magnitude = Math.sqrt(x * x + y * y + z * z);
+                  
+                  if (magnitude > 2) {
+                    // Trigger actual measurement start
+                    waitingForAccelerationRef.current = false;
+                    setWaitingForAcceleration(false);
+                    setIsRunning(true);
+                    setStatus('Measuring...');
+                    
+                    startTimeRef.current = performance.now();
+                    lastTimestampRef.current = null;
+                    ekfRef.current = new ExtendedKalmanFilter();
+
+                    // Clear existing GPS watch and start measurement tracking
+                    if (watchIdRef.current) {
+                      navigator.geolocation.clearWatch(watchIdRef.current);
+                    }
+
+                    if (navigator.geolocation) {
+                      watchIdRef.current = navigator.geolocation.watchPosition(
+                        handlePosition,
+                        (error) => {
+                          setStatus(`GPS error: ${error.message}`);
+                          setIsRunning(false);
+                          setWaitingForAcceleration(false);
+                          waitingForAccelerationRef.current = false;
+                        },
+                        {
+                          enableHighAccuracy: true,
+                          maximumAge: 0,
+                          timeout: 5000,
+                        }
+                      );
+                    }
+
+                    toast({
+                      title: "Measurement Started!",
+                      description: "Tracking your acceleration now",
+                    });
+                  }
+                }
+              }
+            };
+
+            window.addEventListener('devicemotion', handleDeviceMotion);
+            setStatus(prev => prev + ' Browser motion sensors active.');
+            
+            return () => {
+              window.removeEventListener('devicemotion', handleDeviceMotion);
+            };
+          } else {
+            setStatus(prev => prev + ' Motion sensors not supported. Using GPS only.');
+          }
         }
       } catch (error) {
         setStatus('Error accessing sensors. Please allow location access.');
