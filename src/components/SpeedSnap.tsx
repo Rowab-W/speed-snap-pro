@@ -38,6 +38,7 @@ const SpeedSnap: React.FC = () => {
   });
   const [dataPoints, setDataPoints] = useState<DataPoint[]>([]);
   const [hasResults, setHasResults] = useState(false);
+  const [manualStop, setManualStop] = useState(false);
 
   const startTimeRef = useRef<number | null>(null);
   const watchIdRef = useRef<number | null>(null);
@@ -106,10 +107,10 @@ const SpeedSnap: React.FC = () => {
     const { x, y, z } = accelerometerRef.current;
     const magnitude = Math.sqrt(x * x + y * y + z * z);
     
-    if (magnitude > 2 && !isRunning && speed < 5) {
+    if (magnitude > 2 && !isRunning && speed < 5 && !manualStop) {
       startMeasurement();
     }
-  }, [isRunning, speed]);
+  }, [isRunning, speed, manualStop]);
 
   // Start measurement
   const startMeasurement = useCallback(() => {
@@ -260,6 +261,7 @@ const SpeedSnap: React.FC = () => {
     if (!isRunning) return;
 
     setIsRunning(false);
+    setManualStop(true); // Prevent auto-restart
     setStatus('Processing results...');
 
     if (watchIdRef.current) {
@@ -317,6 +319,7 @@ const SpeedSnap: React.FC = () => {
     setElapsedTime(0);
     setDistance(0);
     setDataPoints([]);
+    setManualStop(false); // Allow auto-start again
     setTimes({
       '0-100': null,
       '0-200': null,
