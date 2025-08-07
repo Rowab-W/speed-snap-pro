@@ -122,11 +122,11 @@ const SpeedSnap: React.FC = () => {
                       setWaitingForAcceleration(false);
                       waitingForAccelerationRef.current = false;
                     },
-                    {
-                      enableHighAccuracy: true,
-                      maximumAge: 0,
-                      timeout: 5000,
-                    }
+                        {
+                          enableHighAccuracy: true,
+                          maximumAge: 0,
+                          timeout: 5000,
+                        }
                   );
                 }
 
@@ -332,13 +332,20 @@ const SpeedSnap: React.FC = () => {
     });
   }, []);
 
-  // Handle GPS position updates
+  // Handle GPS position updates with accuracy filtering
   const handlePosition = useCallback((position: GeolocationPosition) => {
     if (!isRunning || !startTimeRef.current || !ekfRef.current) return;
 
+    // Filter out readings with poor accuracy (>10m)
+    const accuracy = position.coords.accuracy;
+    if (accuracy > 10) {
+      console.log('GPS reading rejected - poor accuracy:', accuracy, 'm');
+      return;
+    }
+
     console.log('GPS Position:', {
       speed: position.coords.speed,
-      accuracy: position.coords.accuracy,
+      accuracy: accuracy,
       latitude: position.coords.latitude,
       longitude: position.coords.longitude,
       timestamp: position.timestamp
