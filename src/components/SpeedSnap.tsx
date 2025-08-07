@@ -95,8 +95,8 @@ const SpeedSnap: React.FC = () => {
               const { x, y, z } = accelerometerRef.current;
               const magnitude = Math.sqrt(x * x + y * y + z * z);
               
-              // Use acceleration threshold and ensure START button was pressed
-              if (magnitude > 2) {
+              // Use lower threshold for walking (0.5 m/s² instead of 2)
+              if (magnitude > 0.5) {
                 // Trigger actual measurement start
                 waitingForAccelerationRef.current = false;
                 setWaitingForAcceleration(false);
@@ -159,8 +159,8 @@ const SpeedSnap: React.FC = () => {
                   const { x, y, z } = accelerometerRef.current;
                   const magnitude = Math.sqrt(x * x + y * y + z * z);
                   
-                  // Use acceleration threshold and ensure START button was pressed
-                  if (magnitude > 2) {
+                  // Use lower threshold for walking (0.5 m/s² instead of 2)
+                  if (magnitude > 0.5) {
                     // Trigger actual measurement start
                     waitingForAccelerationRef.current = false;
                     setWaitingForAcceleration(false);
@@ -257,7 +257,7 @@ const SpeedSnap: React.FC = () => {
       halfMile: null,
     });
     setHasResults(false);
-    setStatus('Waiting for acceleration... (>2 m/s²)');
+    setStatus('Waiting for acceleration... (>0.5 m/s²)');
 
     // Start GPS tracking to monitor speed
     if (navigator.geolocation) {
@@ -286,7 +286,7 @@ const SpeedSnap: React.FC = () => {
 
     toast({
       title: "Ready to Start",
-      description: "Accelerate to begin measurement (>2 m/s² from <5 km/h)",
+      description: "Accelerate to begin measurement (>0.5 m/s² from <5 km/h)",
     });
   }, [isRunning, waitingForAcceleration]);
 
@@ -318,11 +318,11 @@ const SpeedSnap: React.FC = () => {
             variant: "destructive",
           });
         },
-        {
-          enableHighAccuracy: true,
-          maximumAge: 0,
-          timeout: 5000,
-        }
+                        {
+                          enableHighAccuracy: true,
+                          maximumAge: 0,
+                          timeout: 10000, // Longer timeout for better accuracy
+                        }
       );
     }
 
@@ -350,12 +350,8 @@ const SpeedSnap: React.FC = () => {
     // Get speed from GPS or calculate from position change
     let speedMs = 0;
     
-    if (position.coords.speed !== null && position.coords.speed >= 0) {
-      // Use GPS speed if available and valid
-      speedMs = position.coords.speed;
-      console.log('Using GPS speed:', speedMs, 'm/s');
-    } else if (lastTimestampRef.current && position.coords.latitude && position.coords.longitude) {
-      // Fallback: calculate speed from position change (better for walking speeds)
+    // Always try to calculate speed from position changes for walking speeds
+    if (lastTimestampRef.current && position.coords.latitude && position.coords.longitude) {
       const prevPos = lastPositionRef.current;
       if (prevPos) {
         const distance = calculateDistance(
@@ -363,10 +359,25 @@ const SpeedSnap: React.FC = () => {
           position.coords.latitude, position.coords.longitude
         );
         const dt = (timestamp - lastTimestampRef.current) / 1000;
-        if (dt > 0) {
-          speedMs = distance / dt;
-          console.log('Calculated speed from position:', speedMs, 'm/s', 'distance:', distance, 'dt:', dt);
+        if (dt > 0.5 && dt < 10) { // Only use if reasonable time difference
+          const calculatedSpeed = distance / dt;
+          console.log('Position-based speed:', calculatedSpeed, 'm/s', 'distance:', distance.toFixed(2), 'dt:', dt.toFixed(2));
+          speedMs = calculatedSpeed;
         }
+      }
+    }
+    
+    // Use GPS speed as fallback or if it's higher (for vehicles)
+    if (position.coords.speed !== null && position.coords.speed >= 0) {
+      const gpsSpeed = position.coords.speed;
+      console.log('GPS speed:', gpsSpeed, 'm/s');
+      
+      // Use GPS speed if it's significantly higher or if position calculation failed
+      if (gpsSpeed > speedMs * 1.5 || speedMs === 0) {
+        speedMs = gpsSpeed;
+        console.log('Using GPS speed');
+      } else {
+        console.log('Using calculated speed');
       }
     }
     
