@@ -7,6 +7,18 @@ import { toast } from '@/hooks/use-toast';
 import SpeedChart from './SpeedChart';
 import { CubicSpline } from '../utils/CubicSpline';
 import { ExtendedKalmanFilter } from '../utils/ExtendedKalmanFilter';
+
+// Calculate distance between two GPS coordinates (Haversine formula)
+const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+  const R = 6371000; // Earth's radius in meters
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+};
 import { Motion } from '@capacitor/motion';
 
 interface TimingResults {
@@ -46,6 +58,7 @@ const SpeedSnap: React.FC = () => {
   const lastTimestampRef = useRef<number | null>(null);
   const ekfRef = useRef<ExtendedKalmanFilter | null>(null);
   const accelerometerRef = useRef<{ x: number; y: number; z: number }>({ x: 0, y: 0, z: 0 });
+  const lastPositionRef = useRef<{ latitude: number; longitude: number } | null>(null);
   const chartRef = useRef<any>(null);
   const waitingForAccelerationRef = useRef<boolean>(false);
 
@@ -90,9 +103,10 @@ const SpeedSnap: React.FC = () => {
                 setIsRunning(true);
                 setStatus('Measuring...');
                 
-                startTimeRef.current = performance.now();
-                lastTimestampRef.current = null;
-                ekfRef.current = new ExtendedKalmanFilter();
+    startTimeRef.current = performance.now();
+    lastTimestampRef.current = null;
+    lastPositionRef.current = null;
+    ekfRef.current = new ExtendedKalmanFilter();
 
                 // Clear existing GPS watch and start measurement tracking
                 if (watchIdRef.current) {
@@ -153,9 +167,10 @@ const SpeedSnap: React.FC = () => {
                     setIsRunning(true);
                     setStatus('Measuring...');
                     
-                    startTimeRef.current = performance.now();
-                    lastTimestampRef.current = null;
-                    ekfRef.current = new ExtendedKalmanFilter();
+    startTimeRef.current = performance.now();
+    lastTimestampRef.current = null;
+    lastPositionRef.current = null;
+    ekfRef.current = new ExtendedKalmanFilter();
 
                     // Clear existing GPS watch and start measurement tracking
                     if (watchIdRef.current) {
@@ -283,6 +298,7 @@ const SpeedSnap: React.FC = () => {
     
     startTimeRef.current = performance.now();
     lastTimestampRef.current = null;
+    lastPositionRef.current = null;
     ekfRef.current = new ExtendedKalmanFilter();
 
     // Continue with existing GPS tracking but now for measurement
@@ -323,15 +339,45 @@ const SpeedSnap: React.FC = () => {
     console.log('GPS Position:', {
       speed: position.coords.speed,
       accuracy: position.coords.accuracy,
+      latitude: position.coords.latitude,
+      longitude: position.coords.longitude,
       timestamp: position.timestamp
     });
 
-    // Use direct GPS speed reading (more accurate than calculating from position changes)
-    const speedMs = position.coords.speed !== null ? position.coords.speed : 0;
-    const speedKmh = speedMs * 3.6; // Convert m/s to km/h
     const timestamp = position.timestamp;
     const elapsed = (performance.now() - startTimeRef.current) / 1000;
-
+    
+    // Get speed from GPS or calculate from position change
+    let speedMs = 0;
+    
+    if (position.coords.speed !== null && position.coords.speed >= 0) {
+      // Use GPS speed if available and valid
+      speedMs = position.coords.speed;
+      console.log('Using GPS speed:', speedMs, 'm/s');
+    } else if (lastTimestampRef.current && position.coords.latitude && position.coords.longitude) {
+      // Fallback: calculate speed from position change (better for walking speeds)
+      const prevPos = lastPositionRef.current;
+      if (prevPos) {
+        const distance = calculateDistance(
+          prevPos.latitude, prevPos.longitude,
+          position.coords.latitude, position.coords.longitude
+        );
+        const dt = (timestamp - lastTimestampRef.current) / 1000;
+        if (dt > 0) {
+          speedMs = distance / dt;
+          console.log('Calculated speed from position:', speedMs, 'm/s', 'distance:', distance, 'dt:', dt);
+        }
+      }
+    }
+    
+    // Store current position for next calculation
+    lastPositionRef.current = {
+      latitude: position.coords.latitude,
+      longitude: position.coords.longitude
+    };
+    
+    const speedKmh = speedMs * 3.6; // Convert m/s to km/h
+    
     // Calculate distance
     if (lastTimestampRef.current) {
       const dt = (timestamp - lastTimestampRef.current) / 1000;
