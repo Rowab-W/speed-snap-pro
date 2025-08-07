@@ -7,6 +7,8 @@ import { toast } from '@/hooks/use-toast';
 import SpeedChart from './SpeedChart';
 import { CubicSpline } from '../utils/CubicSpline';
 import { ExtendedKalmanFilter } from '../utils/ExtendedKalmanFilter';
+import { SavitzkyGolayFilter, OutlierDetector, MultiPassInterpolator } from '../utils/DataProcessing';
+import { Motion } from '@capacitor/motion';
 
 // Calculate distance between two GPS coordinates (Haversine formula)
 const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
@@ -19,7 +21,6 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
   return R * c;
 };
-import { Motion } from '@capacitor/motion';
 
 interface TimingResults {
   '0-100': number | null;
@@ -61,6 +62,11 @@ const SpeedSnap: React.FC = () => {
   const lastPositionRef = useRef<{ latitude: number; longitude: number } | null>(null);
   const chartRef = useRef<any>(null);
   const waitingForAccelerationRef = useRef<boolean>(false);
+  
+  // Data processing filters
+  const savitzkyGolay = useRef(new SavitzkyGolayFilter());
+  const outlierDetector = useRef(new OutlierDetector(3.0));
+  const multiPassInterpolator = useRef(new MultiPassInterpolator());
 
   // Initialize sensors and permissions
   useEffect(() => {
@@ -396,6 +402,29 @@ const SpeedSnap: React.FC = () => {
     
     const speedKmh = speedMs * 3.6; // Convert m/s to km/h
     
+    // Apply real-time outlier detection (but still store the point)
+    const recentPoints = dataPoints.slice(-10); // Last 10 points for context
+    recentPoints.push({ time: elapsed, speed: speedKmh });
+    
+    const outliers = outlierDetector.current.detectOutliers(recentPoints);
+    const isCurrentOutlier = outliers[outliers.length - 1];
+    
+    if (isCurrentOutlier) {
+      console.log('Outlier detected:', speedKmh, 'km/h - using filtered value');
+      // Don't reject completely, but apply light smoothing
+      const filteredPoints = savitzkyGolay.current.filter(recentPoints.slice(-5));
+      const smoothedSpeed = filteredPoints.length > 0 ? filteredPoints[filteredPoints.length - 1].speed : speedKmh;
+      
+      setSpeed(Math.max(0, smoothedSpeed)); // Ensure non-negative
+    } else {
+      setSpeed(speedKmh);
+    }
+    
+    setElapsedTime(elapsed);
+    
+    // Store raw data point (before filtering) for post-processing
+    setDataPoints(prev => [...prev, { time: elapsed, speed: speedKmh }]);
+
     // Calculate distance
     if (lastTimestampRef.current) {
       const dt = (timestamp - lastTimestampRef.current) / 1000;
@@ -403,25 +432,24 @@ const SpeedSnap: React.FC = () => {
     }
     lastTimestampRef.current = timestamp;
 
-    // Apply Kalman filter
+    // Apply Kalman filter with accelerometer data
     const { x, y, z } = accelerometerRef.current;
     const accelMagnitude = Math.sqrt(x * x + y * y + z * z);
     const dt = lastTimestampRef.current ? (timestamp - lastTimestampRef.current) / 1000 : 0.1;
     
     ekfRef.current.predict(dt);
-    const fusedSpeed = ekfRef.current.update([speedKmh, accelMagnitude]);
+    const fusedSpeed = ekfRef.current.update([isCurrentOutlier ? 0 : speedKmh, accelMagnitude]);
 
     console.log('Speed data:', {
       rawSpeedKmh: speedKmh,
       fusedSpeed: fusedSpeed,
+      isOutlier: isCurrentOutlier,
       accelMagnitude: accelMagnitude
     });
 
+    // Use the fused speed for display and milestone checking
     setSpeed(fusedSpeed);
     setElapsedTime(elapsed);
-    
-    // Store data point
-    setDataPoints(prev => [...prev, { time: elapsed, speed: fusedSpeed }]);
 
     // Check timing milestones
     setTimes(prev => {
@@ -487,34 +515,77 @@ const SpeedSnap: React.FC = () => {
       watchIdRef.current = null;
     }
 
-    // Process results with interpolation
+    // Advanced post-processing with multi-pass interpolation
     if (dataPoints.length >= 4) {
       try {
-        const times = dataPoints.map(p => p.time);
-        const speeds = dataPoints.map(p => p.speed);
-        const spline = new CubicSpline(times, speeds);
-
+        console.log('Starting advanced post-processing with', dataPoints.length, 'data points');
+        
         setTimes(prev => {
           const newTimes = { ...prev };
           
-          // Interpolate missing times
-          if (!prev['0-100'] && speeds.some(s => s >= 100)) {
-            newTimes['0-100'] = spline.findTime(100);
+          // Use multi-pass interpolation for missing times
+          if (!prev['0-100'] && dataPoints.some(p => p.speed >= 100)) {
+            const time100 = multiPassInterpolator.current.findTimeForSpeed(dataPoints, 100);
+            if (time100 !== null) {
+              newTimes['0-100'] = time100;
+              console.log('Multi-pass interpolation found 0-100 time:', time100);
+            }
           }
-          if (!prev['0-200'] && speeds.some(s => s >= 200)) {
-            newTimes['0-200'] = spline.findTime(200);
+          
+          if (!prev['0-200'] && dataPoints.some(p => p.speed >= 200)) {
+            const time200 = multiPassInterpolator.current.findTimeForSpeed(dataPoints, 200);
+            if (time200 !== null) {
+              newTimes['0-200'] = time200;
+              console.log('Multi-pass interpolation found 0-200 time:', time200);
+            }
           }
-          if (!prev['0-250'] && speeds.some(s => s >= 250)) {
-            newTimes['0-250'] = spline.findTime(250);
+          
+          if (!prev['0-250'] && dataPoints.some(p => p.speed >= 250)) {
+            const time250 = multiPassInterpolator.current.findTimeForSpeed(dataPoints, 250);
+            if (time250 !== null) {
+              newTimes['0-250'] = time250;
+            }
           }
-          if (!prev['0-300'] && speeds.some(s => s >= 300)) {
-            newTimes['0-300'] = spline.findTime(300);
+          
+          if (!prev['0-300'] && dataPoints.some(p => p.speed >= 300)) {
+            const time300 = multiPassInterpolator.current.findTimeForSpeed(dataPoints, 300);
+            if (time300 !== null) {
+              newTimes['0-300'] = time300;
+            }
           }
           
           return newTimes;
         });
       } catch (error) {
-        console.error('Interpolation error:', error);
+        console.error('Advanced interpolation error:', error);
+        
+        // Fallback to original cubic spline method
+        try {
+          const times = dataPoints.map(p => p.time);
+          const speeds = dataPoints.map(p => p.speed);
+          const spline = new CubicSpline(times, speeds);
+
+          setTimes(prev => {
+            const newTimes = { ...prev };
+            
+            if (!prev['0-100'] && speeds.some(s => s >= 100)) {
+              newTimes['0-100'] = spline.findTime(100);
+            }
+            if (!prev['0-200'] && speeds.some(s => s >= 200)) {
+              newTimes['0-200'] = spline.findTime(200);
+            }
+            if (!prev['0-250'] && speeds.some(s => s >= 250)) {
+              newTimes['0-250'] = spline.findTime(250);
+            }
+            if (!prev['0-300'] && speeds.some(s => s >= 300)) {
+              newTimes['0-300'] = spline.findTime(300);
+            }
+            
+            return newTimes;
+          });
+        } catch (fallbackError) {
+          console.error('Fallback interpolation also failed:', fallbackError);
+        }
       }
     }
 
