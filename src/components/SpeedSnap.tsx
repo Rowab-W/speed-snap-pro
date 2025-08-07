@@ -77,11 +77,12 @@ const SpeedSnap: React.FC = () => {
               z: event.acceleration.z,
             };
             
-            // Only check acceleration if we're waiting for it after pressing START
+            // Only check acceleration if START button was pressed AND we're waiting for acceleration
             if (waitingForAccelerationRef.current) {
               const { x, y, z } = accelerometerRef.current;
               const magnitude = Math.sqrt(x * x + y * y + z * z);
               
+              // Use acceleration threshold and ensure START button was pressed
               if (magnitude > 2) {
                 // Trigger actual measurement start
                 waitingForAccelerationRef.current = false;
@@ -139,11 +140,12 @@ const SpeedSnap: React.FC = () => {
                   z: event.acceleration.z || 0,
                 };
                 
-                // Only check acceleration if we're waiting for it after pressing START
+                // Only check acceleration if START button was pressed AND we're waiting for acceleration
                 if (waitingForAccelerationRef.current) {
                   const { x, y, z } = accelerometerRef.current;
                   const magnitude = Math.sqrt(x * x + y * y + z * z);
                   
+                  // Use acceleration threshold and ensure START button was pressed
                   if (magnitude > 2) {
                     // Trigger actual measurement start
                     waitingForAccelerationRef.current = false;
