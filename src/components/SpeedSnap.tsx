@@ -324,8 +324,9 @@ const SpeedSnap: React.FC = () => {
       timestamp: position.timestamp
     });
 
-    const speedMs = position.coords.speed || 0;
-    const speedKmh = speedMs * 3.6;
+    // Use direct GPS speed reading (more accurate than calculating from position changes)
+    const speedMs = position.coords.speed !== null ? position.coords.speed : 0;
+    const speedKmh = speedMs * 3.6; // Convert m/s to km/h
     const timestamp = position.timestamp;
     const elapsed = (performance.now() - startTimeRef.current) / 1000;
 
