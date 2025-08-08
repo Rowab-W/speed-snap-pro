@@ -76,7 +76,10 @@ export const useGPSTracking = ({
   }, []);
 
   const handlePosition = useCallback((position: GeolocationPosition) => {
-    if (!isRunning || !startTime) return;
+    if (!isRunning || !startTime) {
+      console.log('GPS position ignored - not running or no start time');
+      return;
+    }
 
     // Filter out readings with poor accuracy (>10m)
     const accuracy = position.coords.accuracy;
@@ -168,18 +171,23 @@ export const useGPSTracking = ({
     
     const fusedSpeed = updateKalmanFilter(isCurrentOutlier ? 0 : speedKmh, accelMagnitude, dt);
 
-    console.log('Speed data:', {
-      rawSpeedKmh: speedKmh,
-      fusedSpeed: fusedSpeed,
+    console.log('Speed processing:', {
+      rawSpeedKmh: speedKmh.toFixed(2),
+      fusedSpeed: fusedSpeed.toFixed(2),
       isOutlier: isCurrentOutlier,
-      accelMagnitude: accelMagnitude
+      accelMagnitude: accelMagnitude.toFixed(3),
+      dt: dt.toFixed(3),
+      elapsed: elapsed.toFixed(2)
     });
 
+    // Ensure we don't lose speed due to filtering issues
+    const finalSpeed = Math.max(0, fusedSpeed);
+    
     // Use the fused speed for display and milestone checking
-    onSpeedUpdate(fusedSpeed);
+    onSpeedUpdate(finalSpeed);
     
     // Store data point
-    const dataPoint = { time: elapsed, speed: fusedSpeed };
+    const dataPoint = { time: elapsed, speed: finalSpeed };
     dataPointsRef.current.push(dataPoint);
     onDataPointAdded(dataPoint);
   }, [isRunning, startTime, updateKalmanFilter, getAccelerometerData, onSpeedUpdate, onDataPointAdded, onDistanceUpdate]);
