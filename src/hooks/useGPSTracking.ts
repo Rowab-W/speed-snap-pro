@@ -243,7 +243,7 @@ export const useGPSTracking = ({
   const startGPSTracking = useCallback((options?: PositionOptions) => {
     const defaultOptions = {
       enableHighAccuracy: true,
-      maximumAge: 0,
+      maximumAge: 100, // Target 10Hz (100ms), minimum 5Hz (200ms)
       timeout: 10000,
     };
 
