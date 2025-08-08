@@ -31,7 +31,7 @@ export const useSensorFusion = ({
 
   const initializeSensors = useCallback(async () => {
     try {
-      // Initialize Capacitor Motion sensors for better mobile support
+      // Initialize Capacitor Motion sensors for better mobile support with 200Hz sampling
       try {
         const motionListener = await Motion.addListener('accel', (event) => {
           accelerometerRef.current = {
