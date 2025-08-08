@@ -385,7 +385,7 @@ const SpeedSnap: React.FC = () => {
     });
   }, [hasResults, times]);
 
-  // Simulate 0-100km/h sprint for testing
+  // Simulate complete acceleration test for all measurements
   const simulateSprint = useCallback(() => {
     if (isRunning || waitingForAcceleration) return;
 
@@ -404,31 +404,38 @@ const SpeedSnap: React.FC = () => {
     });
     setHasResults(false);
     
-    // Generate realistic acceleration data for a 0-100km/h sprint
+    // Generate realistic acceleration data up to 300km/h and half mile
     const simulationData: DataPoint[] = [];
-    const totalTime = 6.5; // 6.5 seconds to reach 100km/h
+    const totalTime = 25.0; // Extended time to reach all milestones
     const timeStep = 0.1; // 100ms intervals
     
     for (let t = 0; t <= totalTime; t += timeStep) {
-      // Realistic acceleration curve: fast initial acceleration that tapers off
+      // Realistic acceleration curve with decreasing acceleration at higher speeds
       let speed;
-      if (t <= 1.0) {
-        // Initial strong acceleration
+      if (t <= 2.0) {
+        // Initial strong acceleration (0-50 km/h)
         speed = t * 25;
-      } else if (t <= 3.0) {
-        // Continued strong acceleration
-        speed = 25 + (t - 1.0) * 20;
-      } else if (t <= 5.0) {
-        // Moderate acceleration
-        speed = 65 + (t - 3.0) * 12.5;
+      } else if (t <= 6.0) {
+        // 0-100 km/h phase
+        speed = 50 + (t - 2.0) * 12.5;
+      } else if (t <= 12.0) {
+        // 100-200 km/h phase (slower acceleration)
+        speed = 100 + (t - 6.0) * 16.67;
+      } else if (t <= 18.0) {
+        // 200-250 km/h phase (much slower)
+        speed = 200 + (t - 12.0) * 8.33;
       } else {
-        // Final push to 100km/h
-        speed = 90 + (t - 5.0) * 6.67;
+        // 250-300 km/h phase (very slow)
+        speed = 250 + (t - 18.0) * 7.14;
       }
       
       // Add some realistic noise/variance
-      speed += (Math.random() - 0.5) * 2;
-      speed = Math.max(0, speed);
+      speed += (Math.random() - 0.5) * 3;
+      speed = Math.max(0, Math.min(speed, 300));
+      
+      // Calculate approximate distance (very rough estimation)
+      const avgSpeed = t > 0 ? speed / 2 : 0; // Average speed approximation
+      const distance = (avgSpeed * t * 1000) / 3600; // Convert to meters
       
       simulationData.push({ time: t, speed });
     }
@@ -451,25 +458,18 @@ const SpeedSnap: React.FC = () => {
       setElapsedTime(dataPoint.time);
       setDataPoints(prev => [...prev, dataPoint]);
       
-      // Check for 100km/h milestone
-      if (dataPoint.speed >= 100 && !times['0-100']) {
-        setTimes(prev => ({
-          ...prev,
-          '0-100': dataPoint.time
-        }));
-        toast({
-          title: "100 km/h Reached!",
-          description: `Time: ${dataPoint.time.toFixed(2)}s`,
-        });
-      }
+      // Update distance for simulation (approximate)
+      const avgSpeed = dataPoint.speed / 3.6; // Convert km/h to m/s
+      const distanceIncrement = avgSpeed * 0.1; // Distance in 0.1 seconds
+      setDistance(prev => prev + distanceIncrement);
       
       currentIndex++;
       setTimeout(animate, 100); // 100ms between updates
     };
     
     toast({
-      title: "Simulation Started",
-      description: "Running 0-100km/h test simulation",
+      title: "Full Test Simulation Started",
+      description: "Running complete acceleration test (0-300km/h, 1/4 & 1/2 mile)",
     });
     
     animate();
@@ -564,7 +564,7 @@ const SpeedSnap: React.FC = () => {
             disabled={isRunning || waitingForAcceleration}
           >
             <TestTube className="w-5 h-5 mr-2" />
-            Simulate 0-100km/h Sprint
+            Test All Measurements
           </Button>
         </div>
 
