@@ -333,19 +333,24 @@ const SpeedChart = forwardRef<SpeedChartRef, SpeedChartProps>(({ dataPoints, tim
       legend: {
         position: 'top',
         labels: {
-          color: 'hsl(0 0% 98%)',
+          color: 'hsl(0 0% 15%)',
           font: {
-            size: 12,
+            size: 14,
+            weight: 'bold',
           },
         },
       },
       title: {
         display: true,
         text: 'Speed vs Time',
-        color: 'hsl(0 0% 98%)',
+        color: 'hsl(0 0% 10%)',
         font: {
-          size: 16,
+          size: 20,
           weight: 'bold',
+        },
+        padding: {
+          top: 10,
+          bottom: 20,
         },
       },
       annotation: {
@@ -371,16 +376,17 @@ const SpeedChart = forwardRef<SpeedChartRef, SpeedChartProps>(({ dataPoints, tim
         title: {
           display: true,
           text: 'Time (seconds)',
-          color: 'hsl(0 0% 98%)',
+          color: 'hsl(0 0% 20%)',
           font: {
-            size: 12,
+            size: 14,
             weight: 'bold',
           },
         },
         ticks: {
-          color: 'hsl(220 10% 65%)',
+          color: 'hsl(0 0% 30%)',
           font: {
-            size: 11,
+            size: 12,
+            weight: 'bold',
           },
           stepSize: 1,
         },
@@ -395,16 +401,17 @@ const SpeedChart = forwardRef<SpeedChartRef, SpeedChartProps>(({ dataPoints, tim
         title: {
           display: true,
           text: 'Speed (km/h)',
-          color: 'hsl(0 0% 98%)',
+          color: 'hsl(0 0% 20%)',
           font: {
-            size: 12,
+            size: 14,
             weight: 'bold',
           },
         },
         ticks: {
-          color: 'hsl(220 10% 65%)',
+          color: 'hsl(0 0% 30%)',
           font: {
-            size: 11,
+            size: 12,
+            weight: 'bold',
           },
           stepSize: 25,
         },
