@@ -14,7 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      performance_records: {
+        Row: {
+          id: string
+          max_acceleration: number
+          max_speed: number
+          measurement_duration: number
+          recorded_at: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          max_acceleration: number
+          max_speed: number
+          measurement_duration: number
+          recorded_at?: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          max_acceleration?: number
+          max_speed?: number
+          measurement_duration?: number
+          recorded_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

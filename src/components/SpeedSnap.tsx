@@ -11,6 +11,7 @@ import { useSensorFusion } from '../hooks/useSensorFusion';
 import { useGPSTracking } from '../hooks/useGPSTracking';
 import { MeasurementDisplay } from './MeasurementDisplay';
 import { ResultsPanel } from './ResultsPanel';
+import { supabase } from '@/integrations/supabase/client';
 
 interface TimingResults {
   '0-30': number | null;
@@ -410,6 +411,9 @@ const SpeedSnap: React.FC = () => {
       }
     }
 
+    // Save performance record to database
+    savePerformanceRecord();
+    
     setGpsStatus('Measurement complete');
     setHasResults(true);
     
@@ -418,6 +422,41 @@ const SpeedSnap: React.FC = () => {
       description: "Check your results below!",
     });
   }, [isRunning, waitingForAcceleration, dataPoints, stopGPSTracking]);
+
+  // Save performance record to database
+  const savePerformanceRecord = async () => {
+    try {
+      const maxSpeed = Math.max(...dataPoints.map(p => p.speed), speed);
+      const maxAcceleration = Math.max(...dataPoints.map((p, i) => {
+        if (i === 0) return 0;
+        const speedDiff = p.speed - dataPoints[i - 1].speed;
+        const timeDiff = (p.time - dataPoints[i - 1].time) || 0.1;
+        return (speedDiff / 3.6) / timeDiff; // Convert km/h to m/s²
+      }));
+      
+      const measurementDuration = elapsedTime * 1000; // Convert to milliseconds
+      
+      // Generate a user ID for testing (in production, this would come from auth)
+      const userId = '00000000-0000-0000-0000-000000000000';
+      
+      const { error } = await supabase
+        .from('performance_records')
+        .insert({
+          user_id: userId,
+          max_speed: maxSpeed,
+          max_acceleration: maxAcceleration,
+          measurement_duration: measurementDuration,
+        });
+
+      if (error) {
+        console.error('Error saving performance record:', error);
+      } else {
+        console.log('Performance record saved successfully');
+      }
+    } catch (error) {
+      console.error('Failed to save performance record:', error);
+    }
+  };
 
   // Reset all data (including Grok's state variables)
   const resetMeasurement = useCallback(() => {
