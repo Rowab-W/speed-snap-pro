@@ -7,18 +7,20 @@ interface MeasurementDisplayProps {
   elapsedTime: number;
   status: string;
   isRunning: boolean;
+  targetHit?: boolean;
 }
 
 export const MeasurementDisplay: React.FC<MeasurementDisplayProps> = ({
   speed,
   elapsedTime,
   status,
-  isRunning
+  isRunning,
+  targetHit = false
 }) => {
   return (
     <Card className="p-6 text-center space-y-4 racing-glow">
       <div className="space-y-2">
-        <div className={`text-6xl font-bold speed-gradient ${isRunning ? 'pulse-racing' : ''}`}>
+        <div className={`text-6xl font-bold speed-gradient ${isRunning ? 'pulse-racing' : ''} ${targetHit ? 'target-pop' : ''}`}>
           {Math.round(speed)} km/h
         </div>
         <div className="text-2xl text-accent font-mono">

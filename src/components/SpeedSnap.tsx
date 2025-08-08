@@ -47,6 +47,7 @@ const SpeedSnap: React.FC = () => {
   });
   const [dataPoints, setDataPoints] = useState<DataPoint[]>([]);
   const [hasResults, setHasResults] = useState(false);
+  const [targetHit, setTargetHit] = useState(false);
 
   const startTimeRef = useRef<number | null>(null);
   const chartRef = useRef<any>(null);
@@ -174,6 +175,8 @@ const SpeedSnap: React.FC = () => {
 
       if (speed >= 30 && !prev['0-30']) {
         newTimes['0-30'] = elapsed;
+        setTargetHit(true);
+        setTimeout(() => setTargetHit(false), 1000);
         toast({
           title: "30 km/h Reached!",
           description: `Time: ${elapsed.toFixed(2)}s`,
@@ -181,6 +184,8 @@ const SpeedSnap: React.FC = () => {
       }
       if (speed >= 60 && !prev['0-60']) {
         newTimes['0-60'] = elapsed;
+        setTargetHit(true);
+        setTimeout(() => setTargetHit(false), 1000);
         toast({
           title: "60 km/h Reached!",
           description: `Time: ${elapsed.toFixed(2)}s`,
@@ -188,6 +193,8 @@ const SpeedSnap: React.FC = () => {
       }
       if (speed >= 100 && !prev['0-100']) {
         newTimes['0-100'] = elapsed;
+        setTargetHit(true);
+        setTimeout(() => setTargetHit(false), 1000);
         toast({
           title: "100 km/h Reached!",
           description: `Time: ${elapsed.toFixed(2)}s`,
@@ -195,6 +202,8 @@ const SpeedSnap: React.FC = () => {
       }
       if (speed >= 200 && !prev['0-200']) {
         newTimes['0-200'] = elapsed;
+        setTargetHit(true);
+        setTimeout(() => setTargetHit(false), 1000);
         toast({
           title: "200 km/h Reached!",
           description: `Time: ${elapsed.toFixed(2)}s`,
@@ -202,6 +211,8 @@ const SpeedSnap: React.FC = () => {
       }
       if (speed >= 250 && !prev['0-250']) {
         newTimes['0-250'] = elapsed;
+        setTargetHit(true);
+        setTimeout(() => setTargetHit(false), 1000);
         toast({
           title: "250 km/h Reached!",
           description: `Time: ${elapsed.toFixed(2)}s`,
@@ -209,6 +220,8 @@ const SpeedSnap: React.FC = () => {
       }
       if (speed >= 300 && !prev['0-300']) {
         newTimes['0-300'] = elapsed;
+        setTargetHit(true);
+        setTimeout(() => setTargetHit(false), 1000);
         toast({
           title: "300 km/h Reached!",
           description: `Time: ${elapsed.toFixed(2)}s`,
@@ -670,6 +683,7 @@ const SpeedSnap: React.FC = () => {
           elapsedTime={elapsedTime}
           status={gpsStatus}
           isRunning={isRunning}
+          targetHit={targetHit}
         />
 
         {/* Control Buttons */}
