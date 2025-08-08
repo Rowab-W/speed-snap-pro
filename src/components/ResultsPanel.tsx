@@ -13,51 +13,55 @@ interface TimingResults {
 interface ResultsPanelProps {
   times: TimingResults;
   hasResults: boolean;
+  isRunning?: boolean;
 }
 
-export const ResultsPanel: React.FC<ResultsPanelProps> = ({ times, hasResults }) => {
-  if (!hasResults) return null;
+export const ResultsPanel: React.FC<ResultsPanelProps> = ({ times, hasResults, isRunning = false }) => {
+  // Show panel if we have results OR if we're running and have at least one measurement
+  const shouldShow = hasResults || (isRunning && Object.values(times).some(time => time !== null));
+  
+  if (!shouldShow) return null;
 
   return (
     <Card className="p-6 space-y-4">
-      <h3 className="text-lg font-semibold text-center">Results</h3>
+      <h3 className="text-lg font-semibold text-center">
+        {isRunning ? "Live Results" : "Results"}
+      </h3>
       <div className="grid grid-cols-2 gap-3">
-        {times['0-100'] && (
-          <div className="text-center p-3 bg-muted rounded-lg">
-            <div className="text-sm text-muted-foreground">0-100 km/h</div>
-            <div className="text-lg font-bold text-primary">{times['0-100'].toFixed(2)}s</div>
+        <div className="text-center p-3 bg-muted rounded-lg">
+          <div className="text-sm text-muted-foreground">0-100 km/h</div>
+          <div className={`text-lg font-bold ${times['0-100'] ? 'text-primary' : 'text-muted-foreground'}`}>
+            {times['0-100'] ? `${times['0-100'].toFixed(2)}s` : '--'}
           </div>
-        )}
-        {times['0-200'] && (
-          <div className="text-center p-3 bg-muted rounded-lg">
-            <div className="text-sm text-muted-foreground">0-200 km/h</div>
-            <div className="text-lg font-bold text-accent">{times['0-200'].toFixed(2)}s</div>
+        </div>
+        
+        <div className="text-center p-3 bg-muted rounded-lg">
+          <div className="text-sm text-muted-foreground">0-200 km/h</div>
+          <div className={`text-lg font-bold ${times['0-200'] ? 'text-accent' : 'text-muted-foreground'}`}>
+            {times['0-200'] ? `${times['0-200'].toFixed(2)}s` : '--'}
           </div>
-        )}
-        {times['0-250'] && (
-          <div className="text-center p-3 bg-muted rounded-lg">
-            <div className="text-sm text-muted-foreground">0-250 km/h</div>
-            <div className="text-lg font-bold text-warning">{times['0-250'].toFixed(2)}s</div>
+        </div>
+        
+        <div className="text-center p-3 bg-muted rounded-lg">
+          <div className="text-sm text-muted-foreground">0-250 km/h</div>
+          <div className={`text-lg font-bold ${times['0-250'] ? 'text-warning' : 'text-muted-foreground'}`}>
+            {times['0-250'] ? `${times['0-250'].toFixed(2)}s` : '--'}
           </div>
-        )}
-        {times['0-300'] && (
-          <div className="text-center p-3 bg-muted rounded-lg">
-            <div className="text-sm text-muted-foreground">0-300 km/h</div>
-            <div className="text-lg font-bold text-success">{times['0-300'].toFixed(2)}s</div>
+        </div>
+        
+        <div className="text-center p-3 bg-muted rounded-lg">
+          <div className="text-sm text-muted-foreground">1/4 Mile</div>
+          <div className={`text-lg font-bold ${times.quarterMile ? 'text-success' : 'text-muted-foreground'}`}>
+            {times.quarterMile ? `${times.quarterMile.toFixed(2)}s` : '--'}
           </div>
-        )}
-        {times.quarterMile && (
-          <div className="text-center p-3 bg-muted rounded-lg">
-            <div className="text-sm text-muted-foreground">1/4 Mile</div>
-            <div className="text-lg font-bold text-primary">{times.quarterMile.toFixed(2)}s</div>
+        </div>
+        
+        <div className="text-center p-3 bg-muted rounded-lg col-span-2">
+          <div className="text-sm text-muted-foreground">1/2 Mile</div>
+          <div className={`text-lg font-bold ${times.halfMile ? 'text-accent' : 'text-muted-foreground'}`}>
+            {times.halfMile ? `${times.halfMile.toFixed(2)}s` : '--'}
           </div>
-        )}
-        {times.halfMile && (
-          <div className="text-center p-3 bg-muted rounded-lg">
-            <div className="text-sm text-muted-foreground">1/2 Mile</div>
-            <div className="text-lg font-bold text-accent">{times.halfMile.toFixed(2)}s</div>
-          </div>
-        )}
+        </div>
       </div>
     </Card>
   );

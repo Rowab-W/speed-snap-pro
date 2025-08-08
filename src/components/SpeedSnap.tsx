@@ -632,7 +632,7 @@ const SpeedSnap: React.FC = () => {
         </div>
 
         {/* Results */}
-        <ResultsPanel times={times} hasResults={hasResults} />
+        <ResultsPanel times={times} hasResults={hasResults} isRunning={isRunning || waitingForAcceleration} />
 
         {/* Chart */}
         {dataPoints.length > 0 && (
