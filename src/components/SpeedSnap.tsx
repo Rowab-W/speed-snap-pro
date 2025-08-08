@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { Play, Square, RotateCcw, Download, Zap } from 'lucide-react';
+import { Play, Square, RotateCcw, Download, Zap, TestTube } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import SpeedChart from './SpeedChart';
 import { CubicSpline } from '../utils/CubicSpline';
@@ -378,6 +378,96 @@ const SpeedSnap: React.FC = () => {
     });
   }, [hasResults, times]);
 
+  // Simulate 0-100km/h sprint for testing
+  const simulateSprint = useCallback(() => {
+    if (isRunning || waitingForAcceleration) return;
+
+    setIsRunning(true);
+    setSpeed(0);
+    setElapsedTime(0);
+    setDistance(0);
+    setDataPoints([]);
+    setTimes({
+      '0-100': null,
+      '0-200': null,
+      '0-250': null,
+      '0-300': null,
+      quarterMile: null,
+      halfMile: null,
+    });
+    setHasResults(false);
+    
+    // Generate realistic acceleration data for a 0-100km/h sprint
+    const simulationData: DataPoint[] = [];
+    const totalTime = 6.5; // 6.5 seconds to reach 100km/h
+    const timeStep = 0.1; // 100ms intervals
+    
+    for (let t = 0; t <= totalTime; t += timeStep) {
+      // Realistic acceleration curve: fast initial acceleration that tapers off
+      let speed;
+      if (t <= 1.0) {
+        // Initial strong acceleration
+        speed = t * 25;
+      } else if (t <= 3.0) {
+        // Continued strong acceleration
+        speed = 25 + (t - 1.0) * 20;
+      } else if (t <= 5.0) {
+        // Moderate acceleration
+        speed = 65 + (t - 3.0) * 12.5;
+      } else {
+        // Final push to 100km/h
+        speed = 90 + (t - 5.0) * 6.67;
+      }
+      
+      // Add some realistic noise/variance
+      speed += (Math.random() - 0.5) * 2;
+      speed = Math.max(0, speed);
+      
+      simulationData.push({ time: t, speed });
+    }
+    
+    // Animate the simulation
+    let currentIndex = 0;
+    startTimeRef.current = performance.now();
+    
+    const animate = () => {
+      if (currentIndex >= simulationData.length) {
+        // Simulation complete
+        setTimeout(() => {
+          stopMeasurement();
+        }, 500);
+        return;
+      }
+      
+      const dataPoint = simulationData[currentIndex];
+      setSpeed(dataPoint.speed);
+      setElapsedTime(dataPoint.time);
+      setDataPoints(prev => [...prev, dataPoint]);
+      
+      // Check for 100km/h milestone
+      if (dataPoint.speed >= 100 && !times['0-100']) {
+        setTimes(prev => ({
+          ...prev,
+          '0-100': dataPoint.time
+        }));
+        toast({
+          title: "100 km/h Reached!",
+          description: `Time: ${dataPoint.time.toFixed(2)}s`,
+        });
+      }
+      
+      currentIndex++;
+      setTimeout(animate, 100); // 100ms between updates
+    };
+    
+    toast({
+      title: "Simulation Started",
+      description: "Running 0-100km/h test simulation",
+    });
+    
+    animate();
+  }, [isRunning, waitingForAcceleration, times, stopMeasurement]);
+
   return (
     <div className="min-h-screen bg-gradient-background p-4">
       <div className="max-w-md mx-auto space-y-6">
@@ -439,6 +529,19 @@ const SpeedSnap: React.FC = () => {
             disabled={!hasResults}
           >
             <Download className="w-5 h-5" />
+          </Button>
+        </div>
+
+        {/* Simulation Button */}
+        <div className="flex justify-center">
+          <Button
+            onClick={simulateSprint}
+            variant="secondary"
+            className="w-full h-12 text-lg font-semibold"
+            disabled={isRunning || waitingForAcceleration}
+          >
+            <TestTube className="w-5 h-5 mr-2" />
+            Simulate 0-100km/h Sprint
           </Button>
         </div>
 
