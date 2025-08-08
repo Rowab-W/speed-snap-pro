@@ -53,8 +53,38 @@ const SpeedSnap: React.FC = () => {
   const [targetHit, setTargetHit] = useState(false);
 
   const startTimeRef = useRef<number | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
   const chartRef = useRef<any>(null);
   const multiPassInterpolator = useRef(new MultiPassInterpolator());
+
+  // High-frequency timer for elapsed time display
+  const updateTimer = useCallback(() => {
+    if (startTimeRef.current && isMeasuring) {
+      const elapsed = (performance.now() - startTimeRef.current) / 1000;
+      setElapsedTime(elapsed);
+    }
+    
+    if (isMeasuring) {
+      animationFrameRef.current = requestAnimationFrame(updateTimer);
+    }
+  }, [isMeasuring]);
+
+  // Start high-frequency timer when measurement begins
+  useEffect(() => {
+    if (isMeasuring && !animationFrameRef.current) {
+      animationFrameRef.current = requestAnimationFrame(updateTimer);
+    } else if (!isMeasuring && animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+    };
+  }, [isMeasuring, updateTimer]);
 
   // Handle acceleration detection callback (Grok's logic implementation)
   const handleAccelerationDetected = useCallback(() => {
@@ -105,12 +135,6 @@ const SpeedSnap: React.FC = () => {
       setSpeed(newSpeed);
     } else {
       setSpeed(0);
-    }
-    
-    const elapsed = startTimeRef.current ? (performance.now() - startTimeRef.current) / 1000 : 0;
-    if (isMeasuring) {
-      console.log('⏱️ Elapsed time:', elapsed.toFixed(2), 's');
-      setElapsedTime(elapsed);
     }
   }, [isMeasuring]);
 
