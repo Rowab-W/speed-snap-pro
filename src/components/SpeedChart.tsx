@@ -31,6 +31,8 @@ interface DataPoint {
 }
 
 interface TimingResults {
+  '0-30': number | null;
+  '0-60': number | null;
   '0-100': number | null;
   '0-200': number | null;
   '0-250': number | null;
@@ -124,6 +126,52 @@ const SpeedChart = forwardRef<SpeedChartRef, SpeedChartProps>(({ dataPoints, tim
   const annotations: any = {};
   
   // Add vertical lines for timing milestones
+  if (times['0-30']) {
+    annotations['line30'] = {
+      type: 'line',
+      xMin: times['0-30'],
+      xMax: times['0-30'],
+      borderColor: 'hsl(280 100% 70%)',
+      borderWidth: 2,
+      borderDash: [3, 3],
+      label: {
+        content: '30 km/h',
+        enabled: true,
+        position: 'start',
+        backgroundColor: 'hsl(280 100% 70%)',
+        color: 'hsl(220 15% 8%)',
+        font: {
+          size: 10,
+          weight: 'bold',
+        },
+        padding: 4,
+      },
+    };
+  }
+
+  if (times['0-60']) {
+    annotations['line60'] = {
+      type: 'line',
+      xMin: times['0-60'],
+      xMax: times['0-60'],
+      borderColor: 'hsl(320 100% 65%)',
+      borderWidth: 2,
+      borderDash: [3, 3],
+      label: {
+        content: '60 km/h',
+        enabled: true,
+        position: 'start',
+        backgroundColor: 'hsl(320 100% 65%)',
+        color: 'hsl(0 0% 98%)',
+        font: {
+          size: 10,
+          weight: 'bold',
+        },
+        padding: 4,
+      },
+    };
+  }
+
   if (times['0-100']) {
     annotations['line100'] = {
       type: 'line',
@@ -169,6 +217,71 @@ const SpeedChart = forwardRef<SpeedChartRef, SpeedChartProps>(({ dataPoints, tim
       },
     };
   }
+
+  if (times['0-250']) {
+    annotations['line250'] = {
+      type: 'line',
+      xMin: times['0-250'],
+      xMax: times['0-250'],
+      borderColor: 'hsl(180 60% 50%)',
+      borderWidth: 2,
+      borderDash: [5, 5],
+      label: {
+        content: '250 km/h',
+        enabled: true,
+        position: 'start',
+        backgroundColor: 'hsl(180 60% 50%)',
+        color: 'hsl(220 15% 8%)',
+        font: {
+          size: 10,
+          weight: 'bold',
+        },
+        padding: 4,
+      },
+    };
+  }
+
+  if (times['0-300']) {
+    annotations['line300'] = {
+      type: 'line',
+      xMin: times['0-300'],
+      xMax: times['0-300'],
+      borderColor: 'hsl(300 60% 50%)',
+      borderWidth: 2,
+      borderDash: [5, 5],
+      label: {
+        content: '300 km/h',
+        enabled: true,
+        position: 'start',
+        backgroundColor: 'hsl(300 60% 50%)',
+        color: 'hsl(0 0% 98%)',
+        font: {
+          size: 10,
+          weight: 'bold',
+        },
+        padding: 4,
+      },
+    };
+  }
+
+  // Add horizontal reference lines for speed milestones
+  annotations['speed100'] = {
+    type: 'line',
+    yMin: 100,
+    yMax: 100,
+    borderColor: 'hsl(45 100% 60% / 0.3)',
+    borderWidth: 1,
+    borderDash: [2, 2],
+  };
+
+  annotations['speed200'] = {
+    type: 'line',
+    yMin: 200,
+    yMax: 200,
+    borderColor: 'hsl(120 60% 50% / 0.3)',
+    borderWidth: 1,
+    borderDash: [2, 2],
+  };
 
   const options: ChartOptions<'line'> = {
     responsive: true,
