@@ -2,6 +2,8 @@ import React from 'react';
 import { Card } from '@/components/ui/card';
 
 interface TimingResults {
+  '0-30': number | null;
+  '0-60': number | null;
   '0-100': number | null;
   '0-200': number | null;
   '0-250': number | null;
@@ -26,6 +28,20 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ times, hasResults, i
       </h3>
       <div className="grid grid-cols-2 gap-3">
         <div className="text-center p-3 bg-muted rounded-lg">
+          <div className="text-sm text-muted-foreground">0-30 km/h</div>
+          <div className={`text-lg font-bold ${times['0-30'] ? 'text-primary' : 'text-muted-foreground'}`}>
+            {times['0-30'] ? `${times['0-30'].toFixed(2)}s` : '--'}
+          </div>
+        </div>
+        
+        <div className="text-center p-3 bg-muted rounded-lg">
+          <div className="text-sm text-muted-foreground">0-60 km/h</div>
+          <div className={`text-lg font-bold ${times['0-60'] ? 'text-primary' : 'text-muted-foreground'}`}>
+            {times['0-60'] ? `${times['0-60'].toFixed(2)}s` : '--'}
+          </div>
+        </div>
+        
+        <div className="text-center p-3 bg-muted rounded-lg">
           <div className="text-sm text-muted-foreground">0-100 km/h</div>
           <div className={`text-lg font-bold ${times['0-100'] ? 'text-primary' : 'text-muted-foreground'}`}>
             {times['0-100'] ? `${times['0-100'].toFixed(2)}s` : '--'}
@@ -47,13 +63,20 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ times, hasResults, i
         </div>
         
         <div className="text-center p-3 bg-muted rounded-lg">
+          <div className="text-sm text-muted-foreground">0-300 km/h</div>
+          <div className={`text-lg font-bold ${times['0-300'] ? 'text-primary' : 'text-muted-foreground'}`}>
+            {times['0-300'] ? `${times['0-300'].toFixed(2)}s` : '--'}
+          </div>
+        </div>
+        
+        <div className="text-center p-3 bg-muted rounded-lg">
           <div className="text-sm text-muted-foreground">1/4 Mile</div>
           <div className={`text-lg font-bold ${times.quarterMile ? 'text-primary' : 'text-muted-foreground'}`}>
             {times.quarterMile ? `${times.quarterMile.toFixed(2)}s` : '--'}
           </div>
         </div>
         
-        <div className="text-center p-3 bg-muted rounded-lg col-span-2">
+        <div className="text-center p-3 bg-muted rounded-lg">
           <div className="text-sm text-muted-foreground">1/2 Mile</div>
           <div className={`text-lg font-bold ${times.halfMile ? 'text-primary' : 'text-muted-foreground'}`}>
             {times.halfMile ? `${times.halfMile.toFixed(2)}s` : '--'}

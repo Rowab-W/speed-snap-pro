@@ -13,6 +13,8 @@ import { MeasurementDisplay } from './MeasurementDisplay';
 import { ResultsPanel } from './ResultsPanel';
 
 interface TimingResults {
+  '0-30': number | null;
+  '0-60': number | null;
   '0-100': number | null;
   '0-200': number | null;
   '0-250': number | null;
@@ -34,6 +36,8 @@ const SpeedSnap: React.FC = () => {
   const [distance, setDistance] = useState(0);
   const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
   const [times, setTimes] = useState<TimingResults>({
+    '0-30': null,
+    '0-60': null,
     '0-100': null,
     '0-200': null,
     '0-250': null,
@@ -145,6 +149,20 @@ const SpeedSnap: React.FC = () => {
       const newTimes = { ...prev };
       const elapsed = elapsedTime;
 
+      if (speed >= 30 && !prev['0-30']) {
+        newTimes['0-30'] = elapsed;
+        toast({
+          title: "30 km/h Reached!",
+          description: `Time: ${elapsed.toFixed(2)}s`,
+        });
+      }
+      if (speed >= 60 && !prev['0-60']) {
+        newTimes['0-60'] = elapsed;
+        toast({
+          title: "60 km/h Reached!",
+          description: `Time: ${elapsed.toFixed(2)}s`,
+        });
+      }
       if (speed >= 100 && !prev['0-100']) {
         newTimes['0-100'] = elapsed;
         toast({
@@ -215,6 +233,8 @@ const SpeedSnap: React.FC = () => {
     setDistance(0);
     setDataPoints([]);
     setTimes({
+      '0-30': null,
+      '0-60': null,
       '0-100': null,
       '0-200': null,
       '0-250': null,
@@ -257,6 +277,22 @@ const SpeedSnap: React.FC = () => {
           const newTimes = { ...prev };
           
           // Use multi-pass interpolation for missing times
+          if (!prev['0-30'] && dataPoints.some(p => p.speed >= 30)) {
+            const time30 = multiPassInterpolator.current.findTimeForSpeed(dataPoints, 30);
+            if (time30 !== null) {
+              newTimes['0-30'] = time30;
+              console.log('Multi-pass interpolation found 0-30 time:', time30);
+            }
+          }
+          
+          if (!prev['0-60'] && dataPoints.some(p => p.speed >= 60)) {
+            const time60 = multiPassInterpolator.current.findTimeForSpeed(dataPoints, 60);
+            if (time60 !== null) {
+              newTimes['0-60'] = time60;
+              console.log('Multi-pass interpolation found 0-60 time:', time60);
+            }
+          }
+          
           if (!prev['0-100'] && dataPoints.some(p => p.speed >= 100)) {
             const time100 = multiPassInterpolator.current.findTimeForSpeed(dataPoints, 100);
             if (time100 !== null) {
@@ -301,6 +337,12 @@ const SpeedSnap: React.FC = () => {
           setTimes(prev => {
             const newTimes = { ...prev };
             
+            if (!prev['0-30'] && speeds.some(s => s >= 30)) {
+              newTimes['0-30'] = spline.findTime(30);
+            }
+            if (!prev['0-60'] && speeds.some(s => s >= 60)) {
+              newTimes['0-60'] = spline.findTime(60);
+            }
             if (!prev['0-100'] && speeds.some(s => s >= 100)) {
               newTimes['0-100'] = spline.findTime(100);
             }
@@ -343,6 +385,8 @@ const SpeedSnap: React.FC = () => {
     setDataPoints([]);
     setWaitingForAcceleration(false);
     setTimes({
+      '0-30': null,
+      '0-60': null,
       '0-100': null,
       '0-200': null,
       '0-250': null,
@@ -369,6 +413,8 @@ const SpeedSnap: React.FC = () => {
     let text = 'SpeedSnap Results\n';
     text += `Date: ${new Date().toLocaleString()}\n\n`;
     
+    if (times['0-30']) text += `0-30 km/h: ${times['0-30'].toFixed(2)} s\n`;
+    if (times['0-60']) text += `0-60 km/h: ${times['0-60'].toFixed(2)} s\n`;
     if (times['0-100']) text += `0-100 km/h: ${times['0-100'].toFixed(2)} s\n`;
     if (times['0-200']) text += `0-200 km/h: ${times['0-200'].toFixed(2)} s\n`;
     if (times['0-250']) text += `0-250 km/h: ${times['0-250'].toFixed(2)} s\n`;
@@ -403,6 +449,8 @@ const SpeedSnap: React.FC = () => {
     setDistance(0);
     setDataPoints([]);
     setTimes({
+      '0-30': null,
+      '0-60': null,
       '0-100': null,
       '0-200': null,
       '0-250': null,
@@ -477,6 +525,20 @@ const SpeedSnap: React.FC = () => {
         const newTimes = { ...prev };
         
         // Speed milestones
+        if (dataPoint.speed >= 30 && !prev['0-30']) {
+          newTimes['0-30'] = elapsed;
+          toast({
+            title: "30 km/h Reached!",
+            description: `Time: ${elapsed.toFixed(2)}s`,
+          });
+        }
+        if (dataPoint.speed >= 60 && !prev['0-60']) {
+          newTimes['0-60'] = elapsed;
+          toast({
+            title: "60 km/h Reached!",
+            description: `Time: ${elapsed.toFixed(2)}s`,
+          });
+        }
         if (dataPoint.speed >= 100 && !prev['0-100']) {
           newTimes['0-100'] = elapsed;
           toast({
