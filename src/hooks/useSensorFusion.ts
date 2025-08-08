@@ -44,9 +44,11 @@ export const useSensorFusion = ({
           if (waitingForAccelerationRef.current) {
             const { x, y, z } = accelerometerRef.current;
             const magnitude = Math.sqrt(x * x + y * y + z * z);
+            console.log('🏃 Accelerometer reading:', { x, y, z, magnitude, threshold: accelerationThreshold });
             
             // Use lower threshold for walking (0.5 m/s² instead of 2)
             if (magnitude > accelerationThreshold) {
+              console.log('🚀 Acceleration threshold exceeded! Triggering measurement start');
               // Trigger actual measurement start
               waitingForAccelerationRef.current = false;
               onAccelerationDetected();

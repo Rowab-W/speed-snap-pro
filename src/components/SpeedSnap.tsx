@@ -54,10 +54,13 @@ const SpeedSnap: React.FC = () => {
 
   // Handle acceleration detection callback
   const handleAccelerationDetected = useCallback(() => {
+    console.log('🚀 Acceleration detected! Starting measurement...');
     setWaitingForAcceleration(false);
     setIsRunning(true);
     
     startTimeRef.current = performance.now();
+    console.log('🕐 Start time set:', startTimeRef.current);
+    
     initializeKalmanFilter();
     resetGPSTracking();
     
@@ -66,6 +69,8 @@ const SpeedSnap: React.FC = () => {
       maximumAge: 0,
       timeout: 10000,
     });
+    
+    console.log('📍 GPS tracking started with high accuracy');
   }, []);
 
   // Initialize sensor fusion hook
@@ -84,13 +89,16 @@ const SpeedSnap: React.FC = () => {
 
   // Handle speed updates from GPS
   const handleSpeedUpdate = useCallback((newSpeed: number) => {
+    console.log('🏃 Speed update received:', newSpeed.toFixed(2), 'km/h');
     setSpeed(newSpeed);
     const elapsed = startTimeRef.current ? (performance.now() - startTimeRef.current) / 1000 : 0;
+    console.log('⏱️ Elapsed time:', elapsed.toFixed(2), 's');
     setElapsedTime(elapsed);
   }, []);
 
   // Handle data point additions
   const handleDataPointAdded = useCallback((dataPoint: DataPoint) => {
+    console.log('📊 Data point added:', dataPoint);
     setDataPoints(prev => [...prev, dataPoint]);
   }, []);
 
@@ -226,6 +234,7 @@ const SpeedSnap: React.FC = () => {
   const startMeasurement = useCallback(() => {
     if (isRunning || waitingForAcceleration) return;
 
+    console.log('🎯 START button pressed - preparing for measurement');
     setWaitingForAcceleration(true);
     waitingForAccelerationRef.current = true;
     setSpeed(0);
@@ -245,6 +254,7 @@ const SpeedSnap: React.FC = () => {
     setHasResults(false);
     setGpsStatus('Waiting for acceleration... (>0.5 m/s²)');
 
+    console.log('📍 Starting GPS tracking while waiting for acceleration');
     // Start GPS tracking to monitor speed while waiting
     startGPSTracking({
       enableHighAccuracy: true,

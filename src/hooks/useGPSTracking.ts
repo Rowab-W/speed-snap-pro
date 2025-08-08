@@ -78,8 +78,21 @@ export const useGPSTracking = ({
   }, []);
 
   const handlePosition = useCallback((position: GeolocationPosition) => {
+    console.log('📍 GPS position received. Running:', isRunning, 'StartTime:', startTime);
+    
+    // During waiting phase, we just monitor but don't process for speed calculation
+    if (!isRunning && !startTime) {
+      console.log('🔍 GPS monitoring during wait phase');
+      // Just report GPS accuracy during waiting
+      if (onGpsAccuracyUpdate && position.coords.accuracy) {
+        onGpsAccuracyUpdate(position.coords.accuracy);
+      }
+      return;
+    }
+    
+    // Full processing only when actually running and have start time
     if (!isRunning || !startTime) {
-      console.log('GPS position ignored - not running or no start time');
+      console.log('❌ GPS position ignored - not in measurement mode. Running:', isRunning, 'StartTime:', startTime);
       return;
     }
 
@@ -206,10 +219,13 @@ export const useGPSTracking = ({
       timeout: 10000,
     };
 
+    console.log('🎯 Starting GPS tracking with options:', { ...defaultOptions, ...options });
+    
     if (navigator.geolocation) {
       watchIdRef.current = navigator.geolocation.watchPosition(
         handlePosition,
         (error) => {
+          console.error('❌ GPS tracking error:', error);
           setGpsStatus(`GPS error: ${error.message}`);
           toast({
             title: "GPS Error",
@@ -219,6 +235,10 @@ export const useGPSTracking = ({
         },
         { ...defaultOptions, ...options }
       );
+      console.log('✅ GPS watch started with ID:', watchIdRef.current);
+    } else {
+      console.error('❌ Geolocation not supported');
+      setGpsStatus('Geolocation not supported');
     }
   }, [handlePosition]);
 
