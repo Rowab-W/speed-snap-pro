@@ -30,6 +30,8 @@ interface DataPoint {
 
 const SpeedSnap: React.FC = () => {
   const [isRunning, setIsRunning] = useState(false);
+  const [startTriggered, setStartTriggered] = useState(false);
+  const [isMeasuring, setIsMeasuring] = useState(false);
   const [waitingForAcceleration, setWaitingForAcceleration] = useState(false);
   const [speed, setSpeed] = useState(0);
   const [elapsedTime, setElapsedTime] = useState(0);
@@ -53,26 +55,31 @@ const SpeedSnap: React.FC = () => {
   const chartRef = useRef<any>(null);
   const multiPassInterpolator = useRef(new MultiPassInterpolator());
 
-  // Handle acceleration detection callback
+  // Handle acceleration detection callback (Grok's logic implementation)
   const handleAccelerationDetected = useCallback(() => {
-    console.log('🚀 Acceleration detected! Starting measurement...');
-    setWaitingForAcceleration(false);
-    setIsRunning(true);
-    
-    startTimeRef.current = performance.now(); // Start timer immediately when acceleration detected
-    console.log('🕐 Start time set:', startTimeRef.current);
-    
-    initializeKalmanFilter();
-    resetGPSTracking();
-    
-    startGPSTracking({
-      enableHighAccuracy: true,
-      maximumAge: 0,
-      timeout: 10000,
-    });
-    
-    console.log('📍 GPS tracking started with high accuracy');
-  }, []);
+    if (startTriggered) {
+      console.log('🚀 Acceleration > 2 m/s² detected AND START was pressed! Starting measurement...');
+      setIsMeasuring(true);
+      setWaitingForAcceleration(false);
+      setIsRunning(true);
+      
+      startTimeRef.current = performance.now(); // Start timer immediately when acceleration detected
+      console.log('🕐 Start time set:', startTimeRef.current);
+      
+      initializeKalmanFilter();
+      resetGPSTracking();
+      
+      startGPSTracking({
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 10000,
+      });
+      
+      console.log('📍 GPS tracking started with high accuracy');
+    } else {
+      console.log('🚫 Acceleration detected but START button not pressed - ignoring');
+    }
+  }, [startTriggered]);
 
   // Initialize sensor fusion hook
   const {
@@ -85,32 +92,26 @@ const SpeedSnap: React.FC = () => {
   } = useSensorFusion({
     onAccelerationDetected: handleAccelerationDetected,
     waitingForAcceleration,
-    accelerationThreshold: 0.5
+    accelerationThreshold: 2.0
   });
 
-  // Handle speed updates from GPS
+  // Handle speed updates from GPS (with Grok's logic)
   const handleSpeedUpdate = useCallback((newSpeed: number) => {
     console.log('🏃 Speed update received:', newSpeed.toFixed(2), 'km/h');
-    setSpeed(newSpeed);
     
-    // Check if we should start measurement based on speed (fallback for acceleration detection)
-    if (waitingForAcceleration && !isRunning && newSpeed > 3) {
-      console.log('🚀 Speed-based measurement start triggered! Speed:', newSpeed.toFixed(2), 'km/h');
-      setWaitingForAcceleration(false);
-      waitingForAccelerationRef.current = false;
-      setIsRunning(true);
-      startTimeRef.current = performance.now(); // Start timer immediately when movement detected
-      
-      toast({
-        title: "Measurement Started!",
-        description: "Movement detected via GPS",
-      });
+    // Only set speed if measuring, otherwise keep it at 0 to prevent false readings
+    if (isMeasuring) {
+      setSpeed(newSpeed);
+    } else {
+      setSpeed(0);
     }
     
     const elapsed = startTimeRef.current ? (performance.now() - startTimeRef.current) / 1000 : 0;
-    console.log('⏱️ Elapsed time:', elapsed.toFixed(2), 's');
-    setElapsedTime(elapsed);
-  }, [waitingForAcceleration, isRunning, waitingForAccelerationRef]);
+    if (isMeasuring) {
+      console.log('⏱️ Elapsed time:', elapsed.toFixed(2), 's');
+      setElapsedTime(elapsed);
+    }
+  }, [isMeasuring]);
 
   // Handle data point additions
   const handleDataPointAdded = useCallback((dataPoint: DataPoint) => {
@@ -258,11 +259,11 @@ const SpeedSnap: React.FC = () => {
     });
   }, [distance, elapsedTime, isRunning]);
 
-  // Prepare for measurement (called when START button is pressed)
+  // Prepare for measurement (called when START button is pressed) - Grok's logic
   const startMeasurement = useCallback(async () => {
     if (isRunning || waitingForAcceleration) return;
 
-    console.log('🎯 START button pressed - preparing for measurement');
+    console.log('🎯 START button pressed - setting startTriggered = true');
     
     // First, request GPS permission
     const hasPermission = await requestGPSPermission();
@@ -271,6 +272,8 @@ const SpeedSnap: React.FC = () => {
       return;
     }
 
+    // Grok's logic: Set startTriggered = true when START button is clicked
+    setStartTriggered(true);
     setWaitingForAcceleration(true);
     waitingForAccelerationRef.current = true;
     setSpeed(0);
@@ -288,28 +291,24 @@ const SpeedSnap: React.FC = () => {
       halfMile: null,
     });
     setHasResults(false);
-    setGpsStatus('Waiting for acceleration... (>0.5 m/s²)');
-
-    console.log('📍 Starting GPS tracking while waiting for acceleration');
-    // Start GPS tracking to monitor speed while waiting
-    startGPSTracking({
-      enableHighAccuracy: true,
-      maximumAge: 0,
-      timeout: 5000,
-    });
+    setGpsStatus('Waiting for acceleration... (>2.0 m/s²)');
 
     toast({
       title: "Ready to Start",
-      description: "Accelerate to begin measurement (>0.5 m/s²)",
+      description: "Accelerate to begin measurement (>2.0 m/s²)",
     });
-  }, [isRunning, waitingForAcceleration, startGPSTracking, requestGPSPermission]);
+  }, [isRunning, waitingForAcceleration, requestGPSPermission]);
 
-  // Stop measurement
+  // Stop measurement (Grok's logic implementation)
   const stopMeasurement = useCallback(() => {
     if (!isRunning && !waitingForAcceleration) return;
 
+    // Grok's logic: Set isMeasuring = false, startTriggered = false, speed = 0
+    setIsMeasuring(false);
+    setStartTriggered(false);
     setIsRunning(false);
     setWaitingForAcceleration(false);
+    setSpeed(0); // Set speed display = "0 km/h"
     setGpsStatus('Processing results...');
     startTimeRef.current = null; // Reset timer
 
@@ -420,12 +419,15 @@ const SpeedSnap: React.FC = () => {
     });
   }, [isRunning, waitingForAcceleration, dataPoints, stopGPSTracking]);
 
-  // Reset all data
+  // Reset all data (including Grok's state variables)
   const resetMeasurement = useCallback(() => {
     if (isRunning || waitingForAcceleration) {
       stopMeasurement();
     }
     
+    // Reset Grok's state variables
+    setStartTriggered(false);
+    setIsMeasuring(false);
     setSpeed(0);
     setElapsedTime(0);
     setDistance(0);

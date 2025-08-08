@@ -46,8 +46,8 @@ export const useSensorFusion = ({
             const magnitude = Math.sqrt(x * x + y * y + z * z);
             console.log('🏃 Accelerometer reading:', { x, y, z, magnitude, threshold: accelerationThreshold });
             
-            // Use lower threshold for walking (0.3 m/s² instead of 0.5)
-            if (magnitude > 0.3) {
+            // Use Grok's suggested threshold (2.0 m/s² to prevent false starts)
+            if (magnitude > accelerationThreshold) {
               console.log('🚀 Acceleration threshold exceeded! Triggering measurement start');
               // Trigger actual measurement start
               waitingForAccelerationRef.current = false;
@@ -80,8 +80,8 @@ export const useSensorFusion = ({
                 const { x, y, z } = accelerometerRef.current;
                 const magnitude = Math.sqrt(x * x + y * y + z * z);
                 
-                // Use lower threshold for walking
-                if (magnitude > 0.3) {
+                // Use Grok's suggested threshold (2.0 m/s² to prevent false starts)
+                if (magnitude > accelerationThreshold) {
                   // Trigger actual measurement start
                   waitingForAccelerationRef.current = false;
                   onAccelerationDetected();
