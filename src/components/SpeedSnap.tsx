@@ -58,8 +58,8 @@ const SpeedSnap: React.FC = () => {
     setWaitingForAcceleration(false);
     setIsRunning(true);
     
-    startTimeRef.current = performance.now();
-    console.log('🕐 Start time set:', startTimeRef.current);
+    // Don't set startTimeRef yet - wait for actual speed registration in handleSpeedUpdate
+    console.log('🕐 Measurement active, waiting for speed to start timer');
     
     initializeKalmanFilter();
     resetGPSTracking();
@@ -98,12 +98,18 @@ const SpeedSnap: React.FC = () => {
       setWaitingForAcceleration(false);
       waitingForAccelerationRef.current = false;
       setIsRunning(true);
-      startTimeRef.current = performance.now();
+      // Don't set startTimeRef yet - wait for actual speed registration
       
       toast({
         title: "Measurement Started!",
         description: "Movement detected via GPS",
       });
+    }
+    
+    // Only start the timer when we're running AND have meaningful speed (>1 km/h)
+    if (isRunning && newSpeed > 1 && !startTimeRef.current) {
+      console.log('⏰ Starting timer - meaningful speed detected:', newSpeed.toFixed(2), 'km/h');
+      startTimeRef.current = performance.now();
     }
     
     const elapsed = startTimeRef.current ? (performance.now() - startTimeRef.current) / 1000 : 0;
@@ -298,6 +304,7 @@ const SpeedSnap: React.FC = () => {
     setIsRunning(false);
     setWaitingForAcceleration(false);
     setGpsStatus('Processing results...');
+    startTimeRef.current = null; // Reset timer
 
     stopGPSTracking();
 
