@@ -154,17 +154,17 @@ export const useGPSTracking = ({
       displaySpeed = Math.max(0, displaySpeed); // Ensure non-negative
     }
     
-    // Calculate distance
-    if (lastTimestampRef.current) {
-      const dt = (timestamp - lastTimestampRef.current) / 1000;
-      onDistanceUpdate(speedMs * dt);
-    }
-    lastTimestampRef.current = timestamp;
-
-    // Apply Kalman filter with accelerometer data
+    // Apply Kalman filter with accelerometer data BEFORE updating lastTimestamp
     const { x, y, z } = getAccelerometerData();
     const accelMagnitude = Math.sqrt(x * x + y * y + z * z);
     const dt = lastTimestampRef.current ? (timestamp - lastTimestampRef.current) / 1000 : 0.1;
+    
+    // Calculate distance
+    if (lastTimestampRef.current) {
+      const dtDistance = (timestamp - lastTimestampRef.current) / 1000;
+      onDistanceUpdate(speedMs * dtDistance);
+    }
+    lastTimestampRef.current = timestamp;
     
     const fusedSpeed = updateKalmanFilter(isCurrentOutlier ? 0 : speedKmh, accelMagnitude, dt);
 
