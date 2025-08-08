@@ -32,6 +32,7 @@ const SpeedSnap: React.FC = () => {
   const [speed, setSpeed] = useState(0);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [distance, setDistance] = useState(0);
+  const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
   const [times, setTimes] = useState<TimingResults>({
     '0-100': null,
     '0-200': null,
@@ -94,6 +95,11 @@ const SpeedSnap: React.FC = () => {
     setDistance(prev => prev + additionalDistance);
   }, []);
 
+  // Handle GPS accuracy updates
+  const handleGpsAccuracyUpdate = useCallback((accuracy: number) => {
+    setGpsAccuracy(accuracy);
+  }, []);
+
   // Initialize GPS tracking hook
   const {
     gpsStatus,
@@ -109,7 +115,8 @@ const SpeedSnap: React.FC = () => {
     getAccelerometerData,
     onSpeedUpdate: handleSpeedUpdate,
     onDataPointAdded: handleDataPointAdded,
-    onDistanceUpdate: handleDistanceUpdate
+    onDistanceUpdate: handleDistanceUpdate,
+    onGpsAccuracyUpdate: handleGpsAccuracyUpdate
   });
 
   // Initialize sensors and permissions
@@ -481,6 +488,22 @@ const SpeedSnap: React.FC = () => {
           </div>
           <p className="text-muted-foreground">Professional Acceleration Timer</p>
         </div>
+
+        {/* GPS Accuracy Warning */}
+        {gpsAccuracy !== null && gpsAccuracy > 10 && (
+          <Card className="p-4 border-warning bg-warning/10">
+            <div className="flex items-center gap-2 text-warning-foreground">
+              <Zap className="w-4 h-4" />
+              <div className="text-sm">
+                <strong>Poor GPS Signal</strong>
+                <p className="text-xs mt-1">
+                  GPS accuracy: ±{gpsAccuracy.toFixed(1)}m. For our target ±0.1s accuracy, 
+                  move to an open area with clear sky view.
+                </p>
+              </div>
+            </div>
+          </Card>
+        )}
 
         {/* Main Display Card */}
         <MeasurementDisplay 

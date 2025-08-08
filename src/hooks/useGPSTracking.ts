@@ -27,6 +27,7 @@ interface UseGPSTrackingProps {
   onSpeedUpdate: (speed: number) => void;
   onDataPointAdded: (dataPoint: DataPoint) => void;
   onDistanceUpdate: (distance: number) => void;
+  onGpsAccuracyUpdate?: (accuracy: number) => void;
 }
 
 export const useGPSTracking = ({
@@ -36,7 +37,8 @@ export const useGPSTracking = ({
   getAccelerometerData,
   onSpeedUpdate,
   onDataPointAdded,
-  onDistanceUpdate
+  onDistanceUpdate,
+  onGpsAccuracyUpdate
 }: UseGPSTrackingProps) => {
   const [gpsStatus, setGpsStatus] = useState<string>('Requesting permissions...');
   const watchIdRef = useRef<number | null>(null);
@@ -95,6 +97,11 @@ export const useGPSTracking = ({
       longitude: position.coords.longitude,
       timestamp: position.timestamp
     });
+
+    // Report GPS accuracy if callback provided
+    if (onGpsAccuracyUpdate && position.coords.accuracy) {
+      onGpsAccuracyUpdate(position.coords.accuracy);
+    }
 
     const timestamp = position.timestamp;
     const elapsed = (performance.now() - startTime) / 1000;

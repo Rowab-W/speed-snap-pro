@@ -49,8 +49,8 @@
     --success-foreground: 0 0% 98%;
 
     /* Warning - Racing Yellow */
-    --warning: 45 100% 60%;
-    --warning-foreground: 220 15% 8%;
+    --warning: 45 100% 50%;
+    --warning-foreground: 222.2 84% 4.9%;
 
     /* Gradients */
     --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary-glow)));
@@ -109,6 +109,8 @@
 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
+    --warning: 45 100% 60%;
+    --warning-foreground: 0 0% 100%;
 
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
