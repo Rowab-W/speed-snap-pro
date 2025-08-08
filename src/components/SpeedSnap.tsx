@@ -231,10 +231,18 @@ const SpeedSnap: React.FC = () => {
   }, [distance, elapsedTime, isRunning]);
 
   // Prepare for measurement (called when START button is pressed)
-  const startMeasurement = useCallback(() => {
+  const startMeasurement = useCallback(async () => {
     if (isRunning || waitingForAcceleration) return;
 
     console.log('🎯 START button pressed - preparing for measurement');
+    
+    // First, request GPS permission
+    const hasPermission = await requestGPSPermission();
+    if (!hasPermission) {
+      console.log('❌ GPS permission denied, cannot start measurement');
+      return;
+    }
+
     setWaitingForAcceleration(true);
     waitingForAccelerationRef.current = true;
     setSpeed(0);
@@ -264,9 +272,9 @@ const SpeedSnap: React.FC = () => {
 
     toast({
       title: "Ready to Start",
-      description: "Accelerate to begin measurement (>0.5 m/s² from <5 km/h)",
+      description: "Accelerate to begin measurement (>0.5 m/s²)",
     });
-  }, [isRunning, waitingForAcceleration, startGPSTracking]);
+  }, [isRunning, waitingForAcceleration, startGPSTracking, requestGPSPermission]);
 
   // Stop measurement
   const stopMeasurement = useCallback(() => {

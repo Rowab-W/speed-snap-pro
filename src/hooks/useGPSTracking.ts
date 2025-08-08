@@ -50,27 +50,66 @@ export const useGPSTracking = ({
   const savitzkyGolay = useRef(new SavitzkyGolayFilter());
   const outlierDetector = useRef(new OutlierDetector(3.0));
 
-  const requestGPSPermission = useCallback(async () => {
+  const requestGPSPermission = useCallback(async (): Promise<boolean> => {
     try {
-      await new Promise<void>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(
-          () => {
-            setGpsStatus('GPS permission granted');
-            resolve();
-          },
-          (error) => {
-            setGpsStatus(`GPS error: ${error.message}`);
-            reject(error);
-          },
-          { enableHighAccuracy: true }
-        );
+      console.log('🔐 Requesting GPS permission...');
+      
+      if (!navigator.geolocation) {
+        console.error('❌ Geolocation not supported in this browser');
+        setGpsStatus('Geolocation not supported in this browser');
+        toast({
+          title: "GPS Error",
+          description: "Your browser doesn't support GPS location",
+          variant: "destructive",
+        });
+        return false;
+      }
+
+      // Check if we're in a secure context (HTTPS)
+      if (!window.isSecureContext && location.hostname !== 'localhost') {
+        console.error('❌ GPS requires HTTPS connection');
+        setGpsStatus('GPS requires secure connection (HTTPS)');
+        toast({
+          title: "GPS Error", 
+          description: "GPS requires a secure HTTPS connection",
+          variant: "destructive",
+        });
+        return false;
+      }
+
+      // Request permission by attempting to get current position
+      console.log('📍 Attempting to get current position...');
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 30000
+        });
       });
+
+      console.log('✅ GPS permission granted, initial position:', position);
+      setGpsStatus(`GPS ready (accuracy: ${position.coords.accuracy?.toFixed(0)}m)`);
       return true;
-    } catch (error) {
-      setGpsStatus('Error accessing GPS. Please allow location access.');
+    } catch (error: any) {
+      console.error('❌ GPS permission error:', error);
+      let errorMessage = 'GPS permission denied or unavailable';
+      let toastMessage = "Please allow location access to use SpeedSnap";
+      
+      if (error.code === 1) {
+        errorMessage = 'GPS permission denied by user';
+        toastMessage = "Location access was denied. Please enable it in your browser settings.";
+      } else if (error.code === 2) {
+        errorMessage = 'GPS position unavailable';
+        toastMessage = "GPS position unavailable. Please ensure GPS is enabled.";
+      } else if (error.code === 3) {
+        errorMessage = 'GPS request timeout';
+        toastMessage = "GPS request timed out. Please try again.";
+      }
+      
+      setGpsStatus(errorMessage);
       toast({
         title: "GPS Error",
-        description: "Please allow location access to use SpeedSnap",
+        description: toastMessage,
         variant: "destructive",
       });
       return false;
