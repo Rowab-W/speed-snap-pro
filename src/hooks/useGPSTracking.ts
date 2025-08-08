@@ -119,28 +119,20 @@ export const useGPSTracking = ({
   const handlePosition = useCallback((position: GeolocationPosition) => {
     console.log('📍 GPS position received. Running:', isRunning, 'StartTime:', startTime);
     
-    // During waiting phase, we just monitor but don't process for speed calculation
-    if (!isRunning && !startTime) {
-      console.log('🔍 GPS monitoring during wait phase');
-      // Just report GPS accuracy during waiting
-      if (onGpsAccuracyUpdate && position.coords.accuracy) {
-        onGpsAccuracyUpdate(position.coords.accuracy);
-      }
-      return;
-    }
-    
-    // Full processing only when actually running and have start time
-    if (!isRunning || !startTime) {
-      console.log('❌ GPS position ignored - not in measurement mode. Running:', isRunning, 'StartTime:', startTime);
-      return;
-    }
-
-    // Filter out readings with poor accuracy (>10m)
+    // Filter out readings with poor accuracy (>15m)
     const accuracy = position.coords.accuracy;
-    if (accuracy > 10) {
+    if (accuracy && accuracy > 15) {
       console.log('GPS reading rejected - poor accuracy:', accuracy, 'm');
       return;
     }
+
+    // Report GPS accuracy if callback provided
+    if (onGpsAccuracyUpdate && position.coords.accuracy) {
+      onGpsAccuracyUpdate(position.coords.accuracy);
+    }
+
+    // Process GPS data for speed calculation regardless of running state
+    // This allows speed detection during waiting phase to trigger measurement start
 
     console.log('GPS Position:', {
       speed: position.coords.speed,
@@ -150,13 +142,8 @@ export const useGPSTracking = ({
       timestamp: position.timestamp
     });
 
-    // Report GPS accuracy if callback provided
-    if (onGpsAccuracyUpdate && position.coords.accuracy) {
-      onGpsAccuracyUpdate(position.coords.accuracy);
-    }
-
     const timestamp = position.timestamp;
-    const elapsed = (performance.now() - startTime) / 1000;
+    const elapsed = startTime ? (performance.now() - startTime) / 1000 : 0;
     
     // Get speed from GPS or calculate from position change
     let speedMs = 0;
@@ -221,8 +208,8 @@ export const useGPSTracking = ({
     const accelMagnitude = Math.sqrt(x * x + y * y + z * z);
     const dt = lastTimestampRef.current ? (timestamp - lastTimestampRef.current) / 1000 : 0.1;
     
-    // Calculate distance
-    if (lastTimestampRef.current) {
+    // Calculate distance only if we're actually running
+    if (isRunning && startTime && lastTimestampRef.current) {
       const dtDistance = (timestamp - lastTimestampRef.current) / 1000;
       onDistanceUpdate(speedMs * dtDistance);
     }
@@ -242,13 +229,15 @@ export const useGPSTracking = ({
     // Ensure we don't lose speed due to filtering issues
     const finalSpeed = Math.max(0, fusedSpeed);
     
-    // Use the fused speed for display and milestone checking
+    // Always update speed for acceleration detection, even during waiting
     onSpeedUpdate(finalSpeed);
     
-    // Store data point
-    const dataPoint = { time: elapsed, speed: finalSpeed };
-    dataPointsRef.current.push(dataPoint);
-    onDataPointAdded(dataPoint);
+    // Store data point only if we're actively running
+    if (isRunning && startTime) {
+      const dataPoint = { time: elapsed, speed: finalSpeed };
+      dataPointsRef.current.push(dataPoint);
+      onDataPointAdded(dataPoint);
+    }
   }, [isRunning, startTime, updateKalmanFilter, getAccelerometerData, onSpeedUpdate, onDataPointAdded, onDistanceUpdate]);
 
   const startGPSTracking = useCallback((options?: PositionOptions) => {

@@ -91,10 +91,25 @@ const SpeedSnap: React.FC = () => {
   const handleSpeedUpdate = useCallback((newSpeed: number) => {
     console.log('🏃 Speed update received:', newSpeed.toFixed(2), 'km/h');
     setSpeed(newSpeed);
+    
+    // Check if we should start measurement based on speed (fallback for acceleration detection)
+    if (waitingForAcceleration && !isRunning && newSpeed > 3) {
+      console.log('🚀 Speed-based measurement start triggered! Speed:', newSpeed.toFixed(2), 'km/h');
+      setWaitingForAcceleration(false);
+      waitingForAccelerationRef.current = false;
+      setIsRunning(true);
+      startTimeRef.current = performance.now();
+      
+      toast({
+        title: "Measurement Started!",
+        description: "Movement detected via GPS",
+      });
+    }
+    
     const elapsed = startTimeRef.current ? (performance.now() - startTimeRef.current) / 1000 : 0;
     console.log('⏱️ Elapsed time:', elapsed.toFixed(2), 's');
     setElapsedTime(elapsed);
-  }, []);
+  }, [waitingForAcceleration, isRunning, waitingForAccelerationRef]);
 
   // Handle data point additions
   const handleDataPointAdded = useCallback((dataPoint: DataPoint) => {
