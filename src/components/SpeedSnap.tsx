@@ -161,9 +161,17 @@ const SpeedSnap: React.FC = () => {
       }
       if (speed >= 250 && !prev['0-250']) {
         newTimes['0-250'] = elapsed;
+        toast({
+          title: "250 km/h Reached!",
+          description: `Time: ${elapsed.toFixed(2)}s`,
+        });
       }
       if (speed >= 300 && !prev['0-300']) {
         newTimes['0-300'] = elapsed;
+        toast({
+          title: "300 km/h Reached!",
+          description: `Time: ${elapsed.toFixed(2)}s`,
+        });
       }
       return newTimes;
     });
@@ -462,6 +470,61 @@ const SpeedSnap: React.FC = () => {
       const avgSpeed = dataPoint.speed / 3.6; // Convert km/h to m/s
       const distanceIncrement = avgSpeed * 0.1; // Distance in 0.1 seconds
       setDistance(prev => prev + distanceIncrement);
+      
+      // Check for milestones during simulation
+      const elapsed = dataPoint.time;
+      setTimes(prev => {
+        const newTimes = { ...prev };
+        
+        // Speed milestones
+        if (dataPoint.speed >= 100 && !prev['0-100']) {
+          newTimes['0-100'] = elapsed;
+          toast({
+            title: "100 km/h Reached!",
+            description: `Time: ${elapsed.toFixed(2)}s`,
+          });
+        }
+        if (dataPoint.speed >= 200 && !prev['0-200']) {
+          newTimes['0-200'] = elapsed;
+          toast({
+            title: "200 km/h Reached!",
+            description: `Time: ${elapsed.toFixed(2)}s`,
+          });
+        }
+        if (dataPoint.speed >= 250 && !prev['0-250']) {
+          newTimes['0-250'] = elapsed;
+          toast({
+            title: "250 km/h Reached!",
+            description: `Time: ${elapsed.toFixed(2)}s`,
+          });
+        }
+        if (dataPoint.speed >= 300 && !prev['0-300']) {
+          newTimes['0-300'] = elapsed;
+          toast({
+            title: "300 km/h Reached!",
+            description: `Time: ${elapsed.toFixed(2)}s`,
+          });
+        }
+        
+        // Distance milestones (update distance state and check)
+        const currentDistance = (avgSpeed * elapsed * 1000) / 3600;
+        if (currentDistance >= 402.336 && !prev.quarterMile) {
+          newTimes.quarterMile = elapsed;
+          toast({
+            title: "Quarter Mile Complete!",
+            description: `Time: ${elapsed.toFixed(2)}s`,
+          });
+        }
+        if (currentDistance >= 804.672 && !prev.halfMile) {
+          newTimes.halfMile = elapsed;
+          toast({
+            title: "Half Mile Complete!",
+            description: `Time: ${elapsed.toFixed(2)}s`,
+          });
+        }
+        
+        return newTimes;
+      });
       
       currentIndex++;
       setTimeout(animate, 100); // 100ms between updates
