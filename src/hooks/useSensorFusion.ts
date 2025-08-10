@@ -46,7 +46,7 @@ export const useSensorFusion = ({
             const magnitude = Math.sqrt(x * x + y * y + z * z);
             console.log('🏃 Accelerometer reading:', { x, y, z, magnitude, threshold: accelerationThreshold });
             
-            // Use lower threshold (0.15 m/s² for easier triggering)
+            // Use very low threshold (0.1 m/s² for easier triggering)
             if (magnitude > accelerationThreshold) {
               console.log('🚀 Acceleration threshold exceeded! Triggering measurement start');
               // Trigger actual measurement start
@@ -59,7 +59,7 @@ export const useSensorFusion = ({
               });
             }
           } else {
-            console.log('🔍 Accelerometer active but not waiting for acceleration');
+            console.log('🔍 Accelerometer active but not waiting for acceleration - magnitude:', Math.sqrt(event.acceleration.x**2 + event.acceleration.y**2 + event.acceleration.z**2).toFixed(3));
           }
         });
         
@@ -81,9 +81,11 @@ export const useSensorFusion = ({
               if (waitingForAccelerationRef.current) {
                 const { x, y, z } = accelerometerRef.current;
                 const magnitude = Math.sqrt(x * x + y * y + z * z);
+                console.log('🏃 Browser accelerometer reading:', { x, y, z, magnitude, threshold: accelerationThreshold });
                 
-                // Use lower threshold (0.15 m/s² for easier triggering)
+                // Use very low threshold (0.1 m/s² for easier triggering)
                 if (magnitude > accelerationThreshold) {
+                  console.log('🚀 Browser acceleration threshold exceeded! Triggering measurement start');
                   // Trigger actual measurement start
                   waitingForAccelerationRef.current = false;
                   onAccelerationDetected();

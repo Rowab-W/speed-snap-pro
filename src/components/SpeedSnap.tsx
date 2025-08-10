@@ -136,7 +136,7 @@ const SpeedSnap: React.FC = () => {
   } = useSensorFusion({
     onAccelerationDetected: handleAccelerationDetected,
     waitingForAcceleration,
-    accelerationThreshold: 0.15  // Lowered from 0.3 for easier triggering
+    accelerationThreshold: 0.1  // Very low threshold for easier triggering
   });
 
   // Handle speed updates from GPS (with Grok's logic)
@@ -321,13 +321,21 @@ const SpeedSnap: React.FC = () => {
       halfMile: null,
     });
     setHasResults(false);
-    setGpsStatus('Waiting for acceleration... (>0.15 m/s²)');
+    setGpsStatus('Waiting for acceleration... (>0.1 m/s²)');
+
+    // CRITICAL FIX: Start GPS tracking immediately so we can detect speed/movement
+    console.log('🚀 Starting GPS tracking immediately for movement detection');
+    startGPSTracking({
+      enableHighAccuracy: true,
+      maximumAge: 100,
+      timeout: 5000
+    });
 
     toast({
       title: "Ready to Start",
-      description: "Accelerate to begin measurement (>0.15 m/s²)",
+      description: "Accelerate to begin measurement (>0.1 m/s²)",
     });
-  }, [isRunning, waitingForAcceleration, requestGPSPermission]);
+  }, [isRunning, waitingForAcceleration, requestGPSPermission, startGPSTracking]);
 
   // Stop measurement (Grok's logic implementation)
   const stopMeasurement = useCallback(() => {
