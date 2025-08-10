@@ -21,9 +21,10 @@ interface ResultsPanelProps {
   times: TimingResults;
   hasResults: boolean;
   isRunning?: boolean;
+  hitTargetLabel?: string | null;
 }
 
-export const ResultsPanel: React.FC<ResultsPanelProps> = ({ times, hasResults, isRunning = false }) => {
+export const ResultsPanel: React.FC<ResultsPanelProps> = ({ times, hasResults, isRunning = false, hitTargetLabel = null }) => {
   const { getTargets, getSpeedUnit } = useUnits();
   const targets = getTargets();
 
@@ -36,8 +37,14 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ times, hasResults, i
         {targets.labels.map((label, index) => {
           const key = label as keyof TimingResults;
           const speed = targets.speeds[index];
+          const isHighlighted = hitTargetLabel === key;
           return (
-            <div key={label} className="text-center p-3 bg-muted rounded-lg">
+            <div 
+              key={label} 
+              className={`text-center p-3 bg-muted rounded-lg transition-all duration-300 ${
+                isHighlighted ? 'target-hit-highlight' : ''
+              }`}
+            >
               <div className="text-sm text-muted-foreground">{label} {getSpeedUnit()}</div>
               <div className={`text-lg font-bold ${times[key] ? 'text-primary' : 'text-muted-foreground'}`}>
                 {times[key] ? `${times[key]!.toFixed(2)}s` : '--'}
@@ -46,14 +53,18 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ times, hasResults, i
           );
         })}
         
-        <div className="text-center p-3 bg-muted rounded-lg">
+        <div className={`text-center p-3 bg-muted rounded-lg transition-all duration-300 ${
+          hitTargetLabel === 'quarterMile' ? 'target-hit-highlight' : ''
+        }`}>
           <div className="text-sm text-muted-foreground">1/4 Mile</div>
           <div className={`text-lg font-bold ${times.quarterMile ? 'text-primary' : 'text-muted-foreground'}`}>
             {times.quarterMile ? `${times.quarterMile.toFixed(2)}s` : '--'}
           </div>
         </div>
         
-        <div className="text-center p-3 bg-muted rounded-lg">
+        <div className={`text-center p-3 bg-muted rounded-lg transition-all duration-300 ${
+          hitTargetLabel === 'halfMile' ? 'target-hit-highlight' : ''
+        }`}>
           <div className="text-sm text-muted-foreground">1/2 Mile</div>
           <div className={`text-lg font-bold ${times.halfMile ? 'text-primary' : 'text-muted-foreground'}`}>
             {times.halfMile ? `${times.halfMile.toFixed(2)}s` : '--'}

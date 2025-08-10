@@ -13,6 +13,7 @@ import { useGPSTracking } from '../hooks/useGPSTracking';
 import { MeasurementDisplay } from './MeasurementDisplay';
 import { ResultsPanel } from './ResultsPanel';
 import { supabase } from '@/integrations/supabase/client';
+import { soundNotifier } from '../utils/sounds';
 
 interface TimingResults {
   '0-20': number | null;
@@ -62,6 +63,7 @@ const SpeedSnap: React.FC = () => {
   const [dataPoints, setDataPoints] = useState<DataPoint[]>([]);
   const [hasResults, setHasResults] = useState(false);
   const [targetHit, setTargetHit] = useState(false);
+  const [hitTargetLabel, setHitTargetLabel] = useState<string | null>(null);
 
   const startTimeRef = useRef<number | null>(null);
   const animationFrameRef = useRef<number | null>(null);
@@ -216,7 +218,17 @@ const SpeedSnap: React.FC = () => {
         if (speed >= target && !prev[key]) {
           newTimes[key] = elapsed;
           setTargetHit(true);
-          setTimeout(() => setTargetHit(false), 1000);
+          setHitTargetLabel(key);
+          
+          // Play sound notification
+          soundNotifier.playTargetHit();
+          
+          // Reset highlighting after 2 seconds
+          setTimeout(() => {
+            setTargetHit(false);
+            setHitTargetLabel(null);
+          }, 2000);
+          
           toast({
             title: `${target} ${getSpeedUnit()} Reached!`,
             description: `Time: ${elapsed.toFixed(2)}s`,
@@ -237,6 +249,9 @@ const SpeedSnap: React.FC = () => {
 
       if (distance >= 402.336 && !prev.quarterMile) {
         newTimes.quarterMile = elapsed;
+        setHitTargetLabel('quarterMile');
+        soundNotifier.playMilestone();
+        setTimeout(() => setHitTargetLabel(null), 2000);
         toast({
           title: "Quarter Mile Complete!",
           description: `Time: ${elapsed.toFixed(2)}s`,
@@ -244,6 +259,9 @@ const SpeedSnap: React.FC = () => {
       }
       if (distance >= 804.672 && !prev.halfMile) {
         newTimes.halfMile = elapsed;
+        setHitTargetLabel('halfMile');
+        soundNotifier.playMilestone();
+        setTimeout(() => setHitTargetLabel(null), 2000);
         stopMeasurement();
         toast({
           title: "Half Mile Complete!",
@@ -772,7 +790,12 @@ const SpeedSnap: React.FC = () => {
         </div>
 
         {/* Results */}
-        <ResultsPanel times={times} hasResults={hasResults} isRunning={isRunning || waitingForAcceleration} />
+        <ResultsPanel 
+          times={times} 
+          hasResults={hasResults} 
+          isRunning={isRunning || waitingForAcceleration}
+          hitTargetLabel={hitTargetLabel}
+        />
 
         {/* Chart */}
         {dataPoints.length > 0 && (

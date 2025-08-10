@@ -192,6 +192,26 @@
     }
   }
 
+  /* Target hit highlighting effect */
+  .target-hit-highlight {
+    animation: target-highlight 2s ease-out;
+  }
+
+  @keyframes target-highlight {
+    0% {
+      background-color: hsl(var(--success) / 0.1);
+      border: 2px solid hsl(var(--success));
+      box-shadow: 0 0 20px hsl(var(--success) / 0.6);
+      transform: scale(1.05);
+    }
+    100% {
+      background-color: transparent;
+      border: 2px solid transparent;
+      box-shadow: none;
+      transform: scale(1);
+    }
+  }
+
   /* Speed text gradient */
   .speed-gradient {
     background: var(--gradient-speed);
