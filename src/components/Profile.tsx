@@ -1,6 +1,10 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { User, Settings, Trophy, Timer } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { User, Settings, Trophy, Timer, MessageSquare, HelpCircle, Send, Bell, Smartphone, Globe } from 'lucide-react';
 
 const Profile = () => {
   return (
@@ -62,20 +66,124 @@ const Profile = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm">Units</span>
-              <Badge variant="outline">km/h</Badge>
+          <div className="space-y-4">
+            <div className="space-y-3">
+              <h4 className="text-sm font-medium">Measurement Settings</h4>
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Units</span>
+                <Badge variant="outline">km/h</Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Acceleration Threshold</span>
+                <Badge variant="outline">0.3 m/s²</Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm">GPS Precision</span>
+                <Badge variant="outline">High</Badge>
+              </div>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm">Acceleration Threshold</span>
-              <Badge variant="outline">0.3 m/s²</Badge>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm">GPS Precision</span>
-              <Badge variant="outline">High</Badge>
+            
+            <div className="space-y-3">
+              <h4 className="text-sm font-medium">App Settings</h4>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Bell className="w-4 h-4" />
+                  <span className="text-sm">Notifications</span>
+                </div>
+                <Switch />
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Smartphone className="w-4 h-4" />
+                  <span className="text-sm">Vibration Feedback</span>
+                </div>
+                <Switch />
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Globe className="w-4 h-4" />
+                  <span className="text-sm">Share Data</span>
+                </div>
+                <Switch />
+              </div>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MessageSquare className="w-5 h-5" />
+            Feedback
+          </CardTitle>
+          <CardDescription>
+            Help us improve the app by sharing your thoughts
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <Textarea 
+              placeholder="Tell us what you think about the app, report bugs, or suggest new features..."
+              className="min-h-[100px]"
+            />
+            <Button className="w-full">
+              <Send className="w-4 h-4 mr-2" />
+              Send Feedback
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <HelpCircle className="w-5 h-5" />
+            FAQ
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Accordion type="single" collapsible className="w-full">
+            <AccordionItem value="accuracy">
+              <AccordionTrigger>How accurate are the speed measurements?</AccordionTrigger>
+              <AccordionContent>
+                The app uses GPS and accelerometer data fusion to provide accurate speed measurements. 
+                Accuracy depends on GPS signal quality and device capabilities. For best results, use the app outdoors with clear sky view.
+              </AccordionContent>
+            </AccordionItem>
+            
+            <AccordionItem value="threshold">
+              <AccordionTrigger>What is the acceleration threshold?</AccordionTrigger>
+              <AccordionContent>
+                The acceleration threshold (currently set to 0.3 m/s²) determines when the measurement starts. 
+                When the app detects acceleration above this threshold after pressing START, it begins recording your speed.
+              </AccordionContent>
+            </AccordionItem>
+            
+            <AccordionItem value="permissions">
+              <AccordionTrigger>Why does the app need GPS and motion permissions?</AccordionTrigger>
+              <AccordionContent>
+                GPS permission is required to measure your speed and location accurately. 
+                Motion sensor permission allows the app to detect when you start accelerating to automatically begin measurements.
+              </AccordionContent>
+            </AccordionItem>
+            
+            <AccordionItem value="battery">
+              <AccordionTrigger>Does the app drain battery quickly?</AccordionTrigger>
+              <AccordionContent>
+                The app is optimized for minimal battery usage. GPS and sensors are only active during measurements. 
+                Remember to stop measurements when finished to conserve battery.
+              </AccordionContent>
+            </AccordionItem>
+            
+            <AccordionItem value="support">
+              <AccordionTrigger>How can I get support?</AccordionTrigger>
+              <AccordionContent>
+                You can send feedback through the Feedback section above, or contact our support team. 
+                We typically respond within 24 hours.
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
         </CardContent>
       </Card>
     </div>
