@@ -12,6 +12,7 @@ import { useSensorFusion } from '../hooks/useSensorFusion';
 import { useGPSTracking } from '../hooks/useGPSTracking';
 import { MeasurementDisplay } from './MeasurementDisplay';
 import { ResultsPanel } from './ResultsPanel';
+import { PlacementGuide } from './PlacementGuide';
 import { supabase } from '@/integrations/supabase/client';
 import { soundNotifier } from '../utils/sounds';
 
@@ -64,6 +65,7 @@ const SpeedSnap: React.FC = () => {
   const [hasResults, setHasResults] = useState(false);
   const [targetHit, setTargetHit] = useState(false);
   const [hitTargetLabel, setHitTargetLabel] = useState<string | null>(null);
+  const [showPlacementGuide, setShowPlacementGuide] = useState(false);
 
   const startTimeRef = useRef<number | null>(null);
   const animationFrameRef = useRef<number | null>(null);
@@ -136,7 +138,7 @@ const SpeedSnap: React.FC = () => {
   } = useSensorFusion({
     onAccelerationDetected: handleAccelerationDetected,
     waitingForAcceleration,
-    accelerationThreshold: 0.1  // Very low threshold for easier triggering
+    accelerationThreshold: 0.3  // Dragy-like threshold for reliable detection
   });
 
   // Handle speed updates from GPS - show speed when GPS is active
@@ -286,20 +288,32 @@ const SpeedSnap: React.FC = () => {
     });
   }, [distance, elapsedTime, isRunning]);
 
-  // Prepare for measurement (called when START button is pressed) - Grok's logic
-  const startMeasurement = useCallback(async () => {
+  // Dragy-style measurement start with placement guide
+  const startMeasurement = useCallback(() => {
     if (isRunning || waitingForAcceleration) return;
-
-    console.log('🎯 START button pressed - setting startTriggered = true');
     
-    // First, request GPS permission
+    console.log('🚀 START button pressed - Dragy mode activated');
+    setShowPlacementGuide(true);
+  }, [isRunning, waitingForAcceleration]);
+
+  const handlePlacementGuideClose = useCallback(async () => {
+    setShowPlacementGuide(false);
+    
+    // First request GPS permission
     const hasPermission = await requestGPSPermission();
     if (!hasPermission) {
-      console.log('❌ GPS permission denied, cannot start measurement');
+      console.log('❌ No GPS permission, cannot start');
       return;
     }
 
-    // Grok's logic: Set startTriggered = true when START button is clicked
+    // Initialize sensors and Kalman filter
+    await initializeSensors();
+    initializeKalmanFilter();
+    
+    // Start high-frequency GPS tracking immediately
+    startGPSTracking();
+    
+    // Set Dragy-style states
     setStartTriggered(true);
     setWaitingForAcceleration(true);
     waitingForAccelerationRef.current = true;
@@ -322,21 +336,15 @@ const SpeedSnap: React.FC = () => {
       halfMile: null,
     });
     setHasResults(false);
-    setGpsStatus('Waiting for acceleration... (>0.1 m/s²)');
-
-    // CRITICAL FIX: Start GPS tracking immediately so we can detect speed/movement
-    console.log('🚀 Starting GPS tracking immediately for movement detection');
-    startGPSTracking({
-      enableHighAccuracy: true,
-      maximumAge: 100,
-      timeout: 5000
-    });
-
+    setGpsStatus('Dragy mode ready - waiting for acceleration...');
+    
+    console.log('✅ Dragy mode ready - waiting for acceleration trigger');
+    
     toast({
-      title: "Ready to Start",
-      description: "Accelerate to begin measurement (>0.1 m/s²)",
+      title: "Ready to Launch!",
+      description: "Accelerate smoothly to start measurement",
     });
-  }, [isRunning, waitingForAcceleration, requestGPSPermission, startGPSTracking]);
+  }, [requestGPSPermission, initializeSensors, initializeKalmanFilter, startGPSTracking]);
 
   // Stop measurement (Grok's logic implementation)
   const stopMeasurement = useCallback(() => {
@@ -829,6 +837,11 @@ const SpeedSnap: React.FC = () => {
             />
           </Card>
         )}
+
+        <PlacementGuide 
+          isVisible={showPlacementGuide}
+          onClose={handlePlacementGuideClose}
+        />
       </div>
     </div>
   );

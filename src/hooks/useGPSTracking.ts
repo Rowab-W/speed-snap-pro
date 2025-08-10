@@ -46,9 +46,9 @@ export const useGPSTracking = ({
   const lastPositionRef = useRef<{ latitude: number; longitude: number } | null>(null);
   const dataPointsRef = useRef<DataPoint[]>([]);
   
-  // Data processing filters
+  // Data processing filters with enhanced parameters for precision
   const savitzkyGolay = useRef(new SavitzkyGolayFilter());
-  const outlierDetector = useRef(new OutlierDetector(3.0));
+  const outlierDetector = useRef(new OutlierDetector(2.5)); // Stricter outlier detection
 
   const requestGPSPermission = useCallback(async (): Promise<boolean> => {
     try {
@@ -77,18 +77,25 @@ export const useGPSTracking = ({
         return false;
       }
 
-      // Request permission by attempting to get current position
-      console.log('📍 Attempting to get current position...');
+      // Enhanced GPS permission request with Dragy-like precision settings
+      console.log('📍 Attempting to get current position with high precision...');
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, {
           enableHighAccuracy: true,
-          timeout: 15000,
-          maximumAge: 30000
+          timeout: 20000, // Longer timeout for better accuracy
+          maximumAge: 0    // Force fresh reading
         });
       });
 
       console.log('✅ GPS permission granted, initial position:', position);
       setGpsStatus(`GPS ready (accuracy: ${position.coords.accuracy?.toFixed(0)}m)`);
+      
+      // Show placement guide for optimal performance
+      toast({
+        title: "GPS Ready!",
+        description: "For best results: Place phone on dashboard, sky-facing, and away from metal",
+      });
+      
       return true;
     } catch (error: any) {
       console.error('❌ GPS permission error:', error);
@@ -100,10 +107,10 @@ export const useGPSTracking = ({
         toastMessage = "Location access was denied. Please enable it in your browser settings.";
       } else if (error.code === 2) {
         errorMessage = 'GPS position unavailable';
-        toastMessage = "GPS position unavailable. Please ensure GPS is enabled.";
+        toastMessage = "GPS position unavailable. Please ensure GPS is enabled and you're outdoors.";
       } else if (error.code === 3) {
         errorMessage = 'GPS request timeout';
-        toastMessage = "GPS request timed out. Please try again.";
+        toastMessage = "GPS request timed out. Please try again outdoors with clear sky view.";
       }
       
       setGpsStatus(errorMessage);
@@ -119,38 +126,32 @@ export const useGPSTracking = ({
   const handlePosition = useCallback((position: GeolocationPosition) => {
     console.log('📍 GPS position received. Running:', isRunning, 'StartTime:', startTime);
     
-    // Less strict accuracy filtering for indoor testing - allow up to 50m
+    // Dragy-like precision: Only accept high accuracy readings (under 20m outdoors, 10m for racing)
     const accuracy = position.coords.accuracy;
-    if (accuracy && accuracy > 50) {
-      console.log('⚠️ GPS reading rejected - poor accuracy:', accuracy, 'm');
+    const isRacing = isRunning; // More strict during measurement
+    const maxAccuracy = isRacing ? 10 : 20;
+    
+    if (accuracy && accuracy > maxAccuracy) {
+      console.log('⚠️ GPS reading rejected - poor accuracy:', accuracy, 'm (max:', maxAccuracy, 'm)');
+      setGpsStatus(`Poor GPS signal (${accuracy.toFixed(0)}m) - Move to open area`);
       return;
     }
     
     console.log('✅ GPS reading accepted - accuracy:', accuracy, 'm');
+    setGpsStatus(`GPS tracking (±${accuracy?.toFixed(0)}m)`);
 
-    // Report GPS accuracy if callback provided
+    // Report GPS accuracy for real-time feedback
     if (onGpsAccuracyUpdate && position.coords.accuracy) {
       onGpsAccuracyUpdate(position.coords.accuracy);
     }
 
-    // Process GPS data for speed calculation regardless of running state
-    // This allows speed detection during waiting phase to trigger measurement start
-
-    console.log('GPS Position:', {
-      speed: position.coords.speed,
-      accuracy: accuracy,
-      latitude: position.coords.latitude,
-      longitude: position.coords.longitude,
-      timestamp: position.timestamp
-    });
-
     const timestamp = position.timestamp;
     const elapsed = startTime ? (performance.now() - startTime) / 1000 : 0;
     
-    // Get speed from GPS or calculate from position change
+    // Dragy-style speed calculation with enhanced precision
     let speedMs = 0;
     
-    // Always try to calculate speed from position changes for walking speeds
+    // Primary: Use high-precision position-based calculation
     if (lastTimestampRef.current && position.coords.latitude && position.coords.longitude) {
       const prevPos = lastPositionRef.current;
       if (prevPos) {
@@ -159,43 +160,40 @@ export const useGPSTracking = ({
           position.coords.latitude, position.coords.longitude
         );
         const dt = (timestamp - lastTimestampRef.current) / 1000;
-        if (dt > 0.1 && dt < 10) { // More sensitive - use even small time differences
+        
+        // Enhanced time window validation for 10Hz+ sampling
+        if (dt >= 0.05 && dt <= 2.0) { // 50ms to 2s window
           const calculatedSpeed = distance / dt;
-          console.log('Position-based speed:', calculatedSpeed, 'm/s', 'distance:', distance.toFixed(2), 'dt:', dt.toFixed(2));
+          console.log('📏 Position-based speed:', calculatedSpeed.toFixed(3), 'm/s', 'distance:', distance.toFixed(3), 'dt:', dt.toFixed(3));
           speedMs = calculatedSpeed;
         }
       }
     }
     
-    // Use GPS speed as fallback or if it's higher (for vehicles)
+    // Secondary: GPS velocity as backup/validation
     if (position.coords.speed !== null && position.coords.speed >= 0) {
       const gpsSpeed = position.coords.speed;
-      console.log('GPS speed:', gpsSpeed, 'm/s');
+      console.log('🛰️ GPS velocity:', gpsSpeed.toFixed(3), 'm/s');
       
-      // Use the higher of the two speeds, or GPS if calculation failed
-      if (gpsSpeed > speedMs || speedMs === 0) {
+      // Use GPS speed if calculation failed or for validation
+      if (speedMs === 0) {
         speedMs = gpsSpeed;
-        console.log('Using GPS speed:', gpsSpeed);
+        console.log('Using GPS velocity as primary');
       } else {
-        console.log('Using calculated speed:', speedMs);
+        // Validate calculated speed against GPS speed
+        const speedDiff = Math.abs(speedMs - gpsSpeed);
+        const avgSpeed = (speedMs + gpsSpeed) / 2;
+        const diffPercent = avgSpeed > 0 ? (speedDiff / avgSpeed) * 100 : 0;
+        
+        // If speeds differ significantly, use the more conservative value
+        if (diffPercent > 25 && avgSpeed > 2.78) { // 25% difference at >10 km/h
+          console.log('⚠️ Speed validation failed - using conservative estimate');
+          speedMs = Math.min(speedMs, gpsSpeed);
+        }
       }
     }
     
-    // For testing: add minimum detectable movement (walking speed ~1.4 m/s = 5 km/h)
-    if (speedMs < 0.1 && lastPositionRef.current) {
-      // Force a small speed value for simulation if any movement detected
-      const currentPos = { latitude: position.coords.latitude, longitude: position.coords.longitude };
-      const distance = calculateDistance(
-        lastPositionRef.current.latitude, lastPositionRef.current.longitude,
-        currentPos.latitude, currentPos.longitude
-      );
-      if (distance > 0.1) { // Any detectable movement
-        speedMs = Math.max(speedMs, 0.5); // Minimum 1.8 km/h for testing
-        console.log('🚶 Detected small movement, setting minimum speed:', speedMs, 'm/s');
-      }
-    }
-    
-    // Store current position for next calculation
+    // Store position for next calculation
     lastPositionRef.current = {
       latitude: position.coords.latitude,
       longitude: position.coords.longitude
@@ -203,87 +201,104 @@ export const useGPSTracking = ({
     
     const speedKmh = speedMs * 3.6; // Convert m/s to km/h
     
-    // Apply real-time outlier detection (but still store the point)
-    const recentPoints = dataPointsRef.current.slice(-10); // Last 10 points for context
+    // Enhanced outlier detection and filtering
+    const recentPoints = dataPointsRef.current.slice(-15); // Larger window for better filtering
     recentPoints.push({ time: elapsed, speed: speedKmh });
     
     const outliers = outlierDetector.current.detectOutliers(recentPoints);
     const isCurrentOutlier = outliers[outliers.length - 1];
     
     let displaySpeed = speedKmh;
-    if (isCurrentOutlier) {
-      console.log('Outlier detected:', speedKmh, 'km/h - using filtered value');
-      // Don't reject completely, but apply light smoothing
-      const filteredPoints = savitzkyGolay.current.filter(recentPoints.slice(-5));
-      displaySpeed = filteredPoints.length > 0 ? filteredPoints[filteredPoints.length - 1].speed : speedKmh;
-      displaySpeed = Math.max(0, displaySpeed); // Ensure non-negative
+    if (isCurrentOutlier && recentPoints.length >= 5) {
+      console.log('🚫 Outlier detected:', speedKmh.toFixed(2), 'km/h - applying filter');
+      // Use Savitzky-Golay filter for smooth but responsive filtering
+      const filteredPoints = savitzkyGolay.current.filter(recentPoints.slice(-7));
+      if (filteredPoints.length > 0) {
+        displaySpeed = filteredPoints[filteredPoints.length - 1].speed;
+      }
     }
     
-    // Apply Kalman filter with accelerometer data BEFORE updating lastTimestamp
+    // Sensor fusion with IMU data using Kalman filter
     const { x, y, z } = getAccelerometerData();
     const accelMagnitude = Math.sqrt(x * x + y * y + z * z);
     const dt = lastTimestampRef.current ? (timestamp - lastTimestampRef.current) / 1000 : 0.1;
     
-    // Calculate distance only if we're actually running
+    // Calculate distance increment for running measurements
     if (isRunning && startTime && lastTimestampRef.current) {
       const dtDistance = (timestamp - lastTimestampRef.current) / 1000;
-      onDistanceUpdate(speedMs * dtDistance);
+      const distanceIncrement = speedMs * dtDistance;
+      onDistanceUpdate(distanceIncrement);
     }
+    
     lastTimestampRef.current = timestamp;
     
-    const fusedSpeed = updateKalmanFilter(isCurrentOutlier ? 0 : speedKmh, accelMagnitude, dt);
+    // Apply Kalman filter for sensor fusion (GPS + IMU)
+    const fusedSpeed = updateKalmanFilter(
+      isCurrentOutlier ? displaySpeed : speedKmh, 
+      accelMagnitude, 
+      dt
+    );
 
-    console.log('Speed processing:', {
-      rawSpeedKmh: speedKmh.toFixed(2),
-      fusedSpeed: fusedSpeed.toFixed(2),
-      isOutlier: isCurrentOutlier,
-      accelMagnitude: accelMagnitude.toFixed(3),
-      dt: dt.toFixed(3),
-      elapsed: elapsed.toFixed(2)
-    });
-
-    // Ensure we don't lose speed due to filtering issues
+    // Ensure non-negative speed
     const finalSpeed = Math.max(0, fusedSpeed);
     
-    // Always update speed for acceleration detection, even during waiting
-    console.log('📤 Sending speed update:', finalSpeed.toFixed(2), 'km/h');
+    console.log('🔬 Speed processing:', {
+      rawGPS: speedKmh.toFixed(2),
+      filtered: displaySpeed.toFixed(2),
+      fused: finalSpeed.toFixed(2),
+      outlier: isCurrentOutlier,
+      accuracy: accuracy?.toFixed(1),
+      dt: dt.toFixed(3)
+    });
+    
+    // Always update speed for real-time display
     onSpeedUpdate(finalSpeed);
     
-    // Store data point only if we're actively running
+    // Store data point only during active measurement
     if (isRunning && startTime) {
       const dataPoint = { time: elapsed, speed: finalSpeed };
       dataPointsRef.current.push(dataPoint);
       onDataPointAdded(dataPoint);
       console.log('💾 Data point stored:', dataPoint);
-    } else {
-      console.log('💤 Not storing data point - Running:', isRunning, 'StartTime:', !!startTime);
     }
-  }, [isRunning, startTime, updateKalmanFilter, getAccelerometerData, onSpeedUpdate, onDataPointAdded, onDistanceUpdate]);
+  }, [isRunning, startTime, updateKalmanFilter, getAccelerometerData, onSpeedUpdate, onDataPointAdded, onDistanceUpdate, onGpsAccuracyUpdate]);
 
   const startGPSTracking = useCallback((options?: PositionOptions) => {
-    const defaultOptions = {
+    // Dragy-like high-frequency GPS settings for maximum precision
+    const dragLikeOptions = {
       enableHighAccuracy: true,
-      maximumAge: 100, // Target 10Hz (100ms), minimum 5Hz (200ms)
-      timeout: 10000,
+      maximumAge: 50,        // 50ms for 20Hz theoretical max
+      timeout: 15000,        // Longer timeout for better signal acquisition
+      ...options
     };
 
-    console.log('🎯 Starting GPS tracking with options:', { ...defaultOptions, ...options });
+    console.log('🎯 Starting Dragy-style GPS tracking:', dragLikeOptions);
     
     if (navigator.geolocation) {
       watchIdRef.current = navigator.geolocation.watchPosition(
         handlePosition,
         (error) => {
           console.error('❌ GPS tracking error:', error);
-          setGpsStatus(`GPS error: ${error.message}`);
+          let errorMsg = `GPS error: ${error.message}`;
+          
+          if (error.code === 2) {
+            errorMsg = 'GPS unavailable - Move to open area with clear sky view';
+          } else if (error.code === 3) {
+            errorMsg = 'GPS timeout - Check signal strength';
+          }
+          
+          setGpsStatus(errorMsg);
           toast({
             title: "GPS Error",
-            description: error.message,
+            description: errorMsg,
             variant: "destructive",
           });
         },
-        { ...defaultOptions, ...options }
+        dragLikeOptions
       );
-      console.log('✅ GPS watch started with ID:', watchIdRef.current);
+      
+      console.log('✅ High-frequency GPS tracking started with ID:', watchIdRef.current);
+      setGpsStatus('GPS tracking started - Acquiring signal...');
     } else {
       console.error('❌ Geolocation not supported');
       setGpsStatus('Geolocation not supported');
@@ -294,6 +309,7 @@ export const useGPSTracking = ({
     if (watchIdRef.current) {
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
+      console.log('🛑 GPS tracking stopped');
     }
   }, []);
 
@@ -303,6 +319,7 @@ export const useGPSTracking = ({
     lastPositionRef.current = null;
     dataPointsRef.current = [];
     setGpsStatus('Ready to measure');
+    console.log('🔄 GPS tracking reset');
   }, [stopGPSTracking]);
 
   return {

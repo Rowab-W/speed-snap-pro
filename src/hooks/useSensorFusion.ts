@@ -18,81 +18,144 @@ interface UseSensorFusionProps {
 export const useSensorFusion = ({ 
   onAccelerationDetected, 
   waitingForAcceleration,
-  accelerationThreshold = 0.5 
+  accelerationThreshold = 0.3 // Dragy-like sensitivity
 }: UseSensorFusionProps) => {
   const ekfRef = useRef<ExtendedKalmanFilter | null>(null);
   const accelerometerRef = useRef<AccelerometerData>({ x: 0, y: 0, z: 0 });
   const waitingForAccelerationRef = useRef<boolean>(false);
+  const baselineAccelRef = useRef<number>(9.81); // Gravity baseline for calibration
+  const calibrationSamplesRef = useRef<number[]>([]);
 
-  // Initialize sensors and permissions
   useEffect(() => {
     waitingForAccelerationRef.current = waitingForAcceleration;
   }, [waitingForAcceleration]);
 
+  // Auto-calibration for IMU drift compensation
+  const calibrateBaseline = useCallback(() => {
+    if (calibrationSamplesRef.current.length >= 50) {
+      // Calculate stable baseline from recent stationary readings
+      const avgMagnitude = calibrationSamplesRef.current.reduce((a, b) => a + b, 0) / calibrationSamplesRef.current.length;
+      baselineAccelRef.current = avgMagnitude;
+      console.log('🎯 IMU baseline calibrated to:', avgMagnitude.toFixed(3), 'm/s²');
+      calibrationSamplesRef.current = []; // Reset for next calibration
+    }
+  }, []);
+
   const initializeSensors = useCallback(async () => {
     try {
-      // Initialize Capacitor Motion sensors for better mobile support with 200Hz sampling
+      console.log('🚀 Initializing Dragy-style motion sensors...');
+      
+      // Try Capacitor Motion for native mobile support with high frequency
       try {
+        // Request device motion permissions for iOS
+        if (typeof (DeviceMotionEvent as any).requestPermission === 'function') {
+          const permission = await (DeviceMotionEvent as any).requestPermission();
+          if (permission !== 'granted') {
+            throw new Error('Motion permission denied');
+          }
+        }
+
         const motionListener = await Motion.addListener('accel', (event) => {
-          accelerometerRef.current = {
+          const rawAccel = {
             x: event.acceleration.x,
             y: event.acceleration.y,
             z: event.acceleration.z,
           };
           
-          // Only check acceleration if START button was pressed AND we're waiting for acceleration
+          accelerometerRef.current = rawAccel;
+          const magnitude = Math.sqrt(rawAccel.x * rawAccel.x + rawAccel.y * rawAccel.y + rawAccel.z * rawAccel.z);
+          
+          // Continuous calibration when stationary
+          if (!waitingForAccelerationRef.current && magnitude < baselineAccelRef.current + 0.2) {
+            calibrationSamplesRef.current.push(magnitude);
+            if (calibrationSamplesRef.current.length > 100) {
+              calibrationSamplesRef.current.shift(); // Keep rolling window
+            }
+            if (calibrationSamplesRef.current.length === 50) {
+              calibrateBaseline();
+            }
+          }
+          
+          // Enhanced acceleration detection with baseline compensation
           if (waitingForAccelerationRef.current) {
-            const { x, y, z } = accelerometerRef.current;
-            const magnitude = Math.sqrt(x * x + y * y + z * z);
-            console.log('🏃 Accelerometer reading:', { x, y, z, magnitude, threshold: accelerationThreshold });
+            const netAccel = Math.abs(magnitude - baselineAccelRef.current);
+            console.log('🏃 IMU reading:', {
+              raw: magnitude.toFixed(3),
+              baseline: baselineAccelRef.current.toFixed(3),
+              net: netAccel.toFixed(3),
+              threshold: accelerationThreshold
+            });
             
-            // Use very low threshold (0.1 m/s² for easier triggering)
-            if (magnitude > accelerationThreshold) {
-              console.log('🚀 Acceleration threshold exceeded! Triggering measurement start');
-              // Trigger actual measurement start
+            if (netAccel > accelerationThreshold) {
+              console.log('🚀 Acceleration threshold exceeded! Net accel:', netAccel.toFixed(3), 'm/s²');
               waitingForAccelerationRef.current = false;
               onAccelerationDetected();
               
               toast({
-                title: "Measurement Started!",
-                description: "Tracking your acceleration now",
+                title: "Launch Detected!",
+                description: `Acceleration: ${netAccel.toFixed(1)} m/s²`,
               });
             }
-          } else {
-            console.log('🔍 Accelerometer active but not waiting for acceleration - magnitude:', Math.sqrt(event.acceleration.x**2 + event.acceleration.y**2 + event.acceleration.z**2).toFixed(3));
           }
         });
+        
+        console.log('✅ Capacitor Motion sensors initialized');
         
         return () => {
           motionListener.remove();
         };
-      } catch (error) {
-        // Fallback to browser motion events if Capacitor is not available
+      } catch (capacitorError) {
+        console.log('⚠️ Capacitor Motion not available, falling back to browser API');
+        
+        // Enhanced browser DeviceMotionEvent fallback
         if ('DeviceMotionEvent' in window) {
+          // Request permission for iOS Safari
+          if (typeof (DeviceMotionEvent as any).requestPermission === 'function') {
+            const permission = await (DeviceMotionEvent as any).requestPermission();
+            if (permission !== 'granted') {
+              throw new Error('Motion permission denied by user');
+            }
+          }
+
           const handleDeviceMotion = (event: DeviceMotionEvent) => {
             if (event.acceleration) {
-              accelerometerRef.current = {
+              const rawAccel = {
                 x: event.acceleration.x || 0,
                 y: event.acceleration.y || 0,
                 z: event.acceleration.z || 0,
               };
               
-              // Only check acceleration if START button was pressed AND we're waiting for acceleration
+              accelerometerRef.current = rawAccel;
+              const magnitude = Math.sqrt(rawAccel.x * rawAccel.x + rawAccel.y * rawAccel.y + rawAccel.z * rawAccel.z);
+              
+              // Calibration for browser motion events
+              if (!waitingForAccelerationRef.current && magnitude < baselineAccelRef.current + 0.2) {
+                calibrationSamplesRef.current.push(magnitude);
+                if (calibrationSamplesRef.current.length > 100) {
+                  calibrationSamplesRef.current.shift();
+                }
+                if (calibrationSamplesRef.current.length === 50) {
+                  calibrateBaseline();
+                }
+              }
+              
               if (waitingForAccelerationRef.current) {
-                const { x, y, z } = accelerometerRef.current;
-                const magnitude = Math.sqrt(x * x + y * y + z * z);
-                console.log('🏃 Browser accelerometer reading:', { x, y, z, magnitude, threshold: accelerationThreshold });
+                const netAccel = Math.abs(magnitude - baselineAccelRef.current);
+                console.log('🏃 Browser IMU:', {
+                  raw: magnitude.toFixed(3),
+                  baseline: baselineAccelRef.current.toFixed(3),
+                  net: netAccel.toFixed(3),
+                  threshold: accelerationThreshold
+                });
                 
-                // Use very low threshold (0.1 m/s² for easier triggering)
-                if (magnitude > accelerationThreshold) {
-                  console.log('🚀 Browser acceleration threshold exceeded! Triggering measurement start');
-                  // Trigger actual measurement start
+                if (netAccel > accelerationThreshold) {
+                  console.log('🚀 Browser acceleration detected! Net:', netAccel.toFixed(3), 'm/s²');
                   waitingForAccelerationRef.current = false;
                   onAccelerationDetected();
                   
                   toast({
-                    title: "Measurement Started!",
-                    description: "Tracking your acceleration now",
+                    title: "Launch Detected!",
+                    description: `Acceleration: ${netAccel.toFixed(1)} m/s²`,
                   });
                 }
               }
@@ -100,31 +163,39 @@ export const useSensorFusion = ({
           };
 
           window.addEventListener('devicemotion', handleDeviceMotion);
+          console.log('✅ Browser motion sensors initialized');
           
           return () => {
             window.removeEventListener('devicemotion', handleDeviceMotion);
           };
+        } else {
+          throw new Error('No motion sensors available');
         }
       }
     } catch (error) {
-      console.error('Error initializing sensors:', error);
+      console.error('❌ Sensor initialization failed:', error);
       toast({
         title: "Sensor Error",
-        description: "Motion sensors not available",
+        description: "Motion sensors unavailable. GPS-only mode enabled.",
         variant: "destructive",
       });
     }
-  }, [onAccelerationDetected, accelerationThreshold]);
+  }, [onAccelerationDetected, accelerationThreshold, calibrateBaseline]);
 
   const initializeKalmanFilter = useCallback(() => {
     ekfRef.current = new ExtendedKalmanFilter();
+    console.log('🔬 Enhanced Kalman Filter initialized for sensor fusion');
   }, []);
 
   const updateKalmanFilter = useCallback((speedKmh: number, accelMagnitude: number, dt: number) => {
     if (!ekfRef.current) return speedKmh;
     
+    // Enhanced Kalman filtering with drift compensation
     ekfRef.current.predict(dt);
-    return ekfRef.current.update([speedKmh, accelMagnitude]);
+    const fusedSpeed = ekfRef.current.update([speedKmh, accelMagnitude - baselineAccelRef.current]);
+    
+    // Additional smoothing for Dragy-like stability
+    return Math.max(0, fusedSpeed);
   }, []);
 
   const getAccelerometerData = useCallback(() => {
@@ -134,6 +205,9 @@ export const useSensorFusion = ({
   const resetSensorFusion = useCallback(() => {
     waitingForAccelerationRef.current = false;
     ekfRef.current = new ExtendedKalmanFilter();
+    calibrationSamplesRef.current = [];
+    baselineAccelRef.current = 9.81; // Reset to standard gravity
+    console.log('🔄 Sensor fusion reset and recalibrated');
   }, []);
 
   return {
