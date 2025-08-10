@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -7,9 +6,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { User, Settings, Trophy, Timer, MessageSquare, HelpCircle, Send, Bell, Smartphone, Globe } from 'lucide-react';
+import { useUnits } from '@/contexts/UnitsContext';
 
 const Profile = () => {
-  const [units, setUnits] = useState<'kmh' | 'mph'>('kmh');
+  const { units, setUnits } = useUnits();
   return (
     <div className="p-4 space-y-6">
       <Card>

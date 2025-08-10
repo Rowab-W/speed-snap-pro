@@ -1,6 +1,7 @@
 import React from 'react';
 import { Card } from '@/components/ui/card';
 import { Gauge } from 'lucide-react';
+import { useUnits } from '@/contexts/UnitsContext';
 
 interface MeasurementDisplayProps {
   speed: number;
@@ -17,11 +18,13 @@ export const MeasurementDisplay: React.FC<MeasurementDisplayProps> = ({
   isRunning,
   targetHit = false
 }) => {
+  const { convertSpeed, getSpeedUnit } = useUnits();
+  const displaySpeed = convertSpeed(speed);
   return (
     <Card className="p-6 text-center space-y-4 racing-glow">
       <div className="space-y-2">
         <div className={`text-6xl font-bold speed-gradient ${isRunning ? 'pulse-racing' : ''} ${targetHit ? 'target-pop' : ''}`}>
-          {Math.round(speed)} km/h
+          {Math.round(displaySpeed)} {getSpeedUnit()}
         </div>
         <div className="text-2xl text-accent font-mono">
           {elapsedTime.toFixed(2)} s

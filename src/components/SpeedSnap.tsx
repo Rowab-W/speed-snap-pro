@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Play, Square, RotateCcw, Download, Zap, TestTube } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { useUnits } from '@/contexts/UnitsContext';
 import SpeedChart from './SpeedChart';
 import { CubicSpline } from '../utils/CubicSpline';
 import { MultiPassInterpolator } from '../utils/DataProcessing';
@@ -14,12 +15,16 @@ import { ResultsPanel } from './ResultsPanel';
 import { supabase } from '@/integrations/supabase/client';
 
 interface TimingResults {
+  '0-20': number | null;
   '0-30': number | null;
+  '0-40': number | null;
   '0-60': number | null;
+  '0-80': number | null;
   '0-100': number | null;
+  '0-120': number | null;
+  '0-130': number | null;
   '0-200': number | null;
   '0-250': number | null;
-  '0-300': number | null;
   quarterMile: number | null;
   halfMile: number | null;
 }
@@ -30,6 +35,8 @@ interface DataPoint {
 }
 
 const SpeedSnap: React.FC = () => {
+  const { getTargets, getSpeedUnit } = useUnits();
+  const targets = getTargets();
   const [isRunning, setIsRunning] = useState(false);
   const [startTriggered, setStartTriggered] = useState(false);
   const [isMeasuring, setIsMeasuring] = useState(false);
@@ -39,12 +46,16 @@ const SpeedSnap: React.FC = () => {
   const [distance, setDistance] = useState(0);
   const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
   const [times, setTimes] = useState<TimingResults>({
+    '0-20': null,
     '0-30': null,
+    '0-40': null,
     '0-60': null,
+    '0-80': null,
     '0-100': null,
+    '0-120': null,
+    '0-130': null,
     '0-200': null,
     '0-250': null,
-    '0-300': null,
     quarterMile: null,
     halfMile: null,
   });
@@ -199,60 +210,19 @@ const SpeedSnap: React.FC = () => {
       const newTimes = { ...prev };
       const elapsed = elapsedTime;
 
-      if (speed >= 30 && !prev['0-30']) {
-        newTimes['0-30'] = elapsed;
-        setTargetHit(true);
-        setTimeout(() => setTargetHit(false), 1000);
-        toast({
-          title: "30 km/h Reached!",
-          description: `Time: ${elapsed.toFixed(2)}s`,
-        });
-      }
-      if (speed >= 60 && !prev['0-60']) {
-        newTimes['0-60'] = elapsed;
-        setTargetHit(true);
-        setTimeout(() => setTargetHit(false), 1000);
-        toast({
-          title: "60 km/h Reached!",
-          description: `Time: ${elapsed.toFixed(2)}s`,
-        });
-      }
-      if (speed >= 100 && !prev['0-100']) {
-        newTimes['0-100'] = elapsed;
-        setTargetHit(true);
-        setTimeout(() => setTargetHit(false), 1000);
-        toast({
-          title: "100 km/h Reached!",
-          description: `Time: ${elapsed.toFixed(2)}s`,
-        });
-      }
-      if (speed >= 200 && !prev['0-200']) {
-        newTimes['0-200'] = elapsed;
-        setTargetHit(true);
-        setTimeout(() => setTargetHit(false), 1000);
-        toast({
-          title: "200 km/h Reached!",
-          description: `Time: ${elapsed.toFixed(2)}s`,
-        });
-      }
-      if (speed >= 250 && !prev['0-250']) {
-        newTimes['0-250'] = elapsed;
-        setTargetHit(true);
-        setTimeout(() => setTargetHit(false), 1000);
-        toast({
-          title: "250 km/h Reached!",
-          description: `Time: ${elapsed.toFixed(2)}s`,
-        });
-      }
-      if (speed >= 300 && !prev['0-300']) {
-        newTimes['0-300'] = elapsed;
-        setTargetHit(true);
-        setTimeout(() => setTargetHit(false), 1000);
-        toast({
-          title: "300 km/h Reached!",
-          description: `Time: ${elapsed.toFixed(2)}s`,
-        });
-      }
+      // Use dynamic targets based on units
+      targets.speeds.forEach((target, index) => {
+        const key = targets.labels[index] as keyof typeof prev;
+        if (speed >= target && !prev[key]) {
+          newTimes[key] = elapsed;
+          setTargetHit(true);
+          setTimeout(() => setTargetHit(false), 1000);
+          toast({
+            title: `${target} ${getSpeedUnit()} Reached!`,
+            description: `Time: ${elapsed.toFixed(2)}s`,
+          });
+        }
+      });
       return newTimes;
     });
   }, [speed, elapsedTime, isRunning]);
@@ -306,12 +276,16 @@ const SpeedSnap: React.FC = () => {
     setDistance(0);
     setDataPoints([]);
     setTimes({
+      '0-20': null,
       '0-30': null,
+      '0-40': null,
       '0-60': null,
+      '0-80': null,
       '0-100': null,
+      '0-120': null,
+      '0-130': null,
       '0-200': null,
       '0-250': null,
-      '0-300': null,
       quarterMile: null,
       halfMile: null,
     });
@@ -387,13 +361,6 @@ const SpeedSnap: React.FC = () => {
             }
           }
           
-          if (!prev['0-300'] && dataPoints.some(p => p.speed >= 300)) {
-            const time300 = multiPassInterpolator.current.findTimeForSpeed(dataPoints, 300);
-            if (time300 !== null) {
-              newTimes['0-300'] = time300;
-            }
-          }
-          
           return newTimes;
         });
       } catch (error) {
@@ -422,9 +389,6 @@ const SpeedSnap: React.FC = () => {
             }
             if (!prev['0-250'] && speeds.some(s => s >= 250)) {
               newTimes['0-250'] = spline.findTime(250);
-            }
-            if (!prev['0-300'] && speeds.some(s => s >= 300)) {
-              newTimes['0-300'] = spline.findTime(300);
             }
             
             return newTimes;
@@ -497,12 +461,16 @@ const SpeedSnap: React.FC = () => {
     setDataPoints([]);
     setWaitingForAcceleration(false);
     setTimes({
+      '0-20': null,
       '0-30': null,
+      '0-40': null,
       '0-60': null,
+      '0-80': null,
       '0-100': null,
+      '0-120': null,
+      '0-130': null,
       '0-200': null,
       '0-250': null,
-      '0-300': null,
       quarterMile: null,
       halfMile: null,
     });
@@ -530,7 +498,7 @@ const SpeedSnap: React.FC = () => {
     if (times['0-100']) text += `0-100 km/h: ${times['0-100'].toFixed(2)} s\n`;
     if (times['0-200']) text += `0-200 km/h: ${times['0-200'].toFixed(2)} s\n`;
     if (times['0-250']) text += `0-250 km/h: ${times['0-250'].toFixed(2)} s\n`;
-    if (times['0-300']) text += `0-300 km/h: ${times['0-300'].toFixed(2)} s\n`;
+    
     if (times.quarterMile) text += `Quarter Mile: ${times.quarterMile.toFixed(2)} s\n`;
     if (times.halfMile) text += `Half Mile: ${times.halfMile.toFixed(2)} s\n`;
 
@@ -561,12 +529,16 @@ const SpeedSnap: React.FC = () => {
     setDistance(0);
     setDataPoints([]);
     setTimes({
+      '0-20': null,
       '0-30': null,
+      '0-40': null,
       '0-60': null,
+      '0-80': null,
       '0-100': null,
+      '0-120': null,
+      '0-130': null,
       '0-200': null,
       '0-250': null,
-      '0-300': null,
       quarterMile: null,
       halfMile: null,
     });
@@ -669,13 +641,6 @@ const SpeedSnap: React.FC = () => {
           newTimes['0-250'] = elapsed;
           toast({
             title: "250 km/h Reached!",
-            description: `Time: ${elapsed.toFixed(2)}s`,
-          });
-        }
-        if (dataPoint.speed >= 300 && !prev['0-300']) {
-          newTimes['0-300'] = elapsed;
-          toast({
-            title: "300 km/h Reached!",
             description: `Time: ${elapsed.toFixed(2)}s`,
           });
         }

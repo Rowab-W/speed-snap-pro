@@ -1,13 +1,18 @@
 import React from 'react';
 import { Card } from '@/components/ui/card';
+import { useUnits } from '@/contexts/UnitsContext';
 
 interface TimingResults {
+  '0-20': number | null;
   '0-30': number | null;
+  '0-40': number | null;
   '0-60': number | null;
+  '0-80': number | null;
   '0-100': number | null;
+  '0-120': number | null;
+  '0-130': number | null;
   '0-200': number | null;
   '0-250': number | null;
-  '0-300': number | null;
   quarterMile: number | null;
   halfMile: number | null;
 }
@@ -19,7 +24,8 @@ interface ResultsPanelProps {
 }
 
 export const ResultsPanel: React.FC<ResultsPanelProps> = ({ times, hasResults, isRunning = false }) => {
-  // Always show the panel
+  const { getTargets, getSpeedUnit } = useUnits();
+  const targets = getTargets();
 
   return (
     <Card className="p-6 space-y-4">
@@ -27,47 +33,18 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ times, hasResults, i
         {isRunning ? "Live Results" : "Results"}
       </h3>
       <div className="grid grid-cols-2 gap-3">
-        <div className="text-center p-3 bg-muted rounded-lg">
-          <div className="text-sm text-muted-foreground">0-30 km/h</div>
-          <div className={`text-lg font-bold ${times['0-30'] ? 'text-primary' : 'text-muted-foreground'}`}>
-            {times['0-30'] ? `${times['0-30'].toFixed(2)}s` : '--'}
-          </div>
-        </div>
-        
-        <div className="text-center p-3 bg-muted rounded-lg">
-          <div className="text-sm text-muted-foreground">0-60 km/h</div>
-          <div className={`text-lg font-bold ${times['0-60'] ? 'text-primary' : 'text-muted-foreground'}`}>
-            {times['0-60'] ? `${times['0-60'].toFixed(2)}s` : '--'}
-          </div>
-        </div>
-        
-        <div className="text-center p-3 bg-muted rounded-lg">
-          <div className="text-sm text-muted-foreground">0-100 km/h</div>
-          <div className={`text-lg font-bold ${times['0-100'] ? 'text-primary' : 'text-muted-foreground'}`}>
-            {times['0-100'] ? `${times['0-100'].toFixed(2)}s` : '--'}
-          </div>
-        </div>
-        
-        <div className="text-center p-3 bg-muted rounded-lg">
-          <div className="text-sm text-muted-foreground">0-200 km/h</div>
-          <div className={`text-lg font-bold ${times['0-200'] ? 'text-primary' : 'text-muted-foreground'}`}>
-            {times['0-200'] ? `${times['0-200'].toFixed(2)}s` : '--'}
-          </div>
-        </div>
-        
-        <div className="text-center p-3 bg-muted rounded-lg">
-          <div className="text-sm text-muted-foreground">0-250 km/h</div>
-          <div className={`text-lg font-bold ${times['0-250'] ? 'text-primary' : 'text-muted-foreground'}`}>
-            {times['0-250'] ? `${times['0-250'].toFixed(2)}s` : '--'}
-          </div>
-        </div>
-        
-        <div className="text-center p-3 bg-muted rounded-lg">
-          <div className="text-sm text-muted-foreground">0-300 km/h</div>
-          <div className={`text-lg font-bold ${times['0-300'] ? 'text-primary' : 'text-muted-foreground'}`}>
-            {times['0-300'] ? `${times['0-300'].toFixed(2)}s` : '--'}
-          </div>
-        </div>
+        {targets.labels.map((label, index) => {
+          const key = label as keyof TimingResults;
+          const speed = targets.speeds[index];
+          return (
+            <div key={label} className="text-center p-3 bg-muted rounded-lg">
+              <div className="text-sm text-muted-foreground">{label} {getSpeedUnit()}</div>
+              <div className={`text-lg font-bold ${times[key] ? 'text-primary' : 'text-muted-foreground'}`}>
+                {times[key] ? `${times[key]!.toFixed(2)}s` : '--'}
+              </div>
+            </div>
+          );
+        })}
         
         <div className="text-center p-3 bg-muted rounded-lg">
           <div className="text-sm text-muted-foreground">1/4 Mile</div>
