@@ -119,12 +119,14 @@ export const useGPSTracking = ({
   const handlePosition = useCallback((position: GeolocationPosition) => {
     console.log('📍 GPS position received. Running:', isRunning, 'StartTime:', startTime);
     
-    // Filter out readings with poor accuracy (>15m)
+    // Less strict accuracy filtering for indoor testing - allow up to 50m
     const accuracy = position.coords.accuracy;
-    if (accuracy && accuracy > 15) {
+    if (accuracy && accuracy > 50) {
       console.log('⚠️ GPS reading rejected - poor accuracy:', accuracy, 'm');
       return;
     }
+    
+    console.log('✅ GPS reading accepted - accuracy:', accuracy, 'm');
 
     // Report GPS accuracy if callback provided
     if (onGpsAccuracyUpdate && position.coords.accuracy) {
@@ -157,7 +159,7 @@ export const useGPSTracking = ({
           position.coords.latitude, position.coords.longitude
         );
         const dt = (timestamp - lastTimestampRef.current) / 1000;
-        if (dt > 0.5 && dt < 10) { // Only use if reasonable time difference
+        if (dt > 0.1 && dt < 10) { // More sensitive - use even small time differences
           const calculatedSpeed = distance / dt;
           console.log('Position-based speed:', calculatedSpeed, 'm/s', 'distance:', distance.toFixed(2), 'dt:', dt.toFixed(2));
           speedMs = calculatedSpeed;
@@ -170,12 +172,26 @@ export const useGPSTracking = ({
       const gpsSpeed = position.coords.speed;
       console.log('GPS speed:', gpsSpeed, 'm/s');
       
-      // Use GPS speed if it's significantly higher or if position calculation failed
-      if (gpsSpeed > speedMs * 1.5 || speedMs === 0) {
+      // Use the higher of the two speeds, or GPS if calculation failed
+      if (gpsSpeed > speedMs || speedMs === 0) {
         speedMs = gpsSpeed;
-        console.log('Using GPS speed');
+        console.log('Using GPS speed:', gpsSpeed);
       } else {
-        console.log('Using calculated speed');
+        console.log('Using calculated speed:', speedMs);
+      }
+    }
+    
+    // For testing: add minimum detectable movement (walking speed ~1.4 m/s = 5 km/h)
+    if (speedMs < 0.1 && lastPositionRef.current) {
+      // Force a small speed value for simulation if any movement detected
+      const currentPos = { latitude: position.coords.latitude, longitude: position.coords.longitude };
+      const distance = calculateDistance(
+        lastPositionRef.current.latitude, lastPositionRef.current.longitude,
+        currentPos.latitude, currentPos.longitude
+      );
+      if (distance > 0.1) { // Any detectable movement
+        speedMs = Math.max(speedMs, 0.5); // Minimum 1.8 km/h for testing
+        console.log('🚶 Detected small movement, setting minimum speed:', speedMs, 'm/s');
       }
     }
     
