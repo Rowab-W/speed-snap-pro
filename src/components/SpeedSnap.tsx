@@ -249,9 +249,13 @@ const SpeedSnap: React.FC = () => {
 
       if (distance >= 402.336 && !prev.quarterMile) {
         newTimes.quarterMile = elapsed;
+        setTargetHit(true);
         setHitTargetLabel('quarterMile');
         soundNotifier.playMilestone();
-        setTimeout(() => setHitTargetLabel(null), 5000);
+        setTimeout(() => {
+          setTargetHit(false);
+          setHitTargetLabel(null);
+        }, 5000);
         toast({
           title: "Quarter Mile Complete!",
           description: `Time: ${elapsed.toFixed(2)}s`,
@@ -259,9 +263,13 @@ const SpeedSnap: React.FC = () => {
       }
       if (distance >= 804.672 && !prev.halfMile) {
         newTimes.halfMile = elapsed;
+        setTargetHit(true);
         setHitTargetLabel('halfMile');
         soundNotifier.playMilestone();
-        setTimeout(() => setHitTargetLabel(null), 5000);
+        setTimeout(() => {
+          setTargetHit(false);
+          setHitTargetLabel(null);
+        }, 5000);
         stopMeasurement();
         toast({
           title: "Half Mile Complete!",
