@@ -122,7 +122,7 @@ export const useGPSTracking = ({
     // Filter out readings with poor accuracy (>15m)
     const accuracy = position.coords.accuracy;
     if (accuracy && accuracy > 15) {
-      console.log('GPS reading rejected - poor accuracy:', accuracy, 'm');
+      console.log('⚠️ GPS reading rejected - poor accuracy:', accuracy, 'm');
       return;
     }
 
@@ -230,6 +230,7 @@ export const useGPSTracking = ({
     const finalSpeed = Math.max(0, fusedSpeed);
     
     // Always update speed for acceleration detection, even during waiting
+    console.log('📤 Sending speed update:', finalSpeed.toFixed(2), 'km/h');
     onSpeedUpdate(finalSpeed);
     
     // Store data point only if we're actively running
@@ -237,6 +238,9 @@ export const useGPSTracking = ({
       const dataPoint = { time: elapsed, speed: finalSpeed };
       dataPointsRef.current.push(dataPoint);
       onDataPointAdded(dataPoint);
+      console.log('💾 Data point stored:', dataPoint);
+    } else {
+      console.log('💤 Not storing data point - Running:', isRunning, 'StartTime:', !!startTime);
     }
   }, [isRunning, startTime, updateKalmanFilter, getAccelerometerData, onSpeedUpdate, onDataPointAdded, onDistanceUpdate]);
 

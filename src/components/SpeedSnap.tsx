@@ -141,12 +141,14 @@ const SpeedSnap: React.FC = () => {
 
   // Handle speed updates from GPS (with Grok's logic)
   const handleSpeedUpdate = useCallback((newSpeed: number) => {
-    console.log('🏃 Speed update received:', newSpeed.toFixed(2), 'km/h');
+    console.log('🏃 Speed update received:', newSpeed.toFixed(2), 'km/h, isMeasuring:', isMeasuring);
     
     // Only set speed if measuring, otherwise keep it at 0 to prevent false readings
     if (isMeasuring) {
+      console.log('✅ Setting speed to:', newSpeed.toFixed(2), 'km/h');
       setSpeed(newSpeed);
     } else {
+      console.log('❌ Not measuring - keeping speed at 0');
       setSpeed(0);
     }
   }, [isMeasuring]);

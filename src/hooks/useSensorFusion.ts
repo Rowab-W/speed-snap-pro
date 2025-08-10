@@ -58,6 +58,8 @@ export const useSensorFusion = ({
                 description: "Tracking your acceleration now",
               });
             }
+          } else {
+            console.log('🔍 Accelerometer active but not waiting for acceleration');
           }
         });
         
