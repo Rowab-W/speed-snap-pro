@@ -223,11 +223,11 @@ const SpeedSnap: React.FC = () => {
           // Play sound notification
           soundNotifier.playTargetHit();
           
-          // Reset highlighting after 2 seconds
+          // Reset highlighting after 5 seconds
           setTimeout(() => {
             setTargetHit(false);
             setHitTargetLabel(null);
-          }, 2000);
+          }, 5000);
           
           toast({
             title: `${target} ${getSpeedUnit()} Reached!`,
@@ -251,7 +251,7 @@ const SpeedSnap: React.FC = () => {
         newTimes.quarterMile = elapsed;
         setHitTargetLabel('quarterMile');
         soundNotifier.playMilestone();
-        setTimeout(() => setHitTargetLabel(null), 2000);
+        setTimeout(() => setHitTargetLabel(null), 5000);
         toast({
           title: "Quarter Mile Complete!",
           description: `Time: ${elapsed.toFixed(2)}s`,
@@ -261,7 +261,7 @@ const SpeedSnap: React.FC = () => {
         newTimes.halfMile = elapsed;
         setHitTargetLabel('halfMile');
         soundNotifier.playMilestone();
-        setTimeout(() => setHitTargetLabel(null), 2000);
+        setTimeout(() => setHitTargetLabel(null), 5000);
         stopMeasurement();
         toast({
           title: "Half Mile Complete!",

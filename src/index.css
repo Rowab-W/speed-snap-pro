@@ -194,7 +194,7 @@
 
   /* Target hit highlighting effect */
   .target-hit-highlight {
-    animation: target-highlight 2s ease-out;
+    animation: target-highlight 5s ease-out;
   }
 
   @keyframes target-highlight {
