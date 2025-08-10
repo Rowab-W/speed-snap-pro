@@ -141,17 +141,23 @@ const SpeedSnap: React.FC = () => {
 
   // Handle speed updates from GPS (with Grok's logic)
   const handleSpeedUpdate = useCallback((newSpeed: number) => {
-    console.log('🏃 Speed update received:', newSpeed.toFixed(2), 'km/h, isMeasuring:', isMeasuring);
+    console.log('🏃 Speed update received:', newSpeed.toFixed(2), 'km/h, isMeasuring:', isMeasuring, 'waitingForAcceleration:', waitingForAcceleration);
     
-    // Only set speed if measuring, otherwise keep it at 0 to prevent false readings
-    if (isMeasuring) {
+    // CRITICAL FIX: Show speed when waiting for acceleration OR measuring
+    if (isMeasuring || waitingForAcceleration) {
       console.log('✅ Setting speed to:', newSpeed.toFixed(2), 'km/h');
       setSpeed(newSpeed);
+      
+      // If we're getting speed while waiting for acceleration, auto-trigger measurement
+      if (waitingForAcceleration && newSpeed > 1 && startTriggered) {
+        console.log('🚀 Speed detected while waiting for acceleration - auto-starting measurement');
+        handleAccelerationDetected();
+      }
     } else {
       console.log('❌ Not measuring - keeping speed at 0');
       setSpeed(0);
     }
-  }, [isMeasuring]);
+  }, [isMeasuring, waitingForAcceleration, startTriggered, handleAccelerationDetected]);
 
   // Handle data point additions
   const handleDataPointAdded = useCallback((dataPoint: DataPoint) => {
