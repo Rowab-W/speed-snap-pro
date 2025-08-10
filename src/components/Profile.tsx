@@ -5,11 +5,24 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { User, Settings, Trophy, Timer, MessageSquare, HelpCircle, Send, Bell, Smartphone, Globe } from 'lucide-react';
+import { User, Settings, Trophy, Timer, MessageSquare, HelpCircle, Send, Bell, Smartphone, Globe, Moon, Sun, Monitor } from 'lucide-react';
 import { useUnits } from '@/contexts/UnitsContext';
+import { useTheme } from 'next-themes';
 
 const Profile = () => {
   const { units, setUnits } = useUnits();
+  const { theme, setTheme } = useTheme();
+
+  const getThemeIcon = () => {
+    switch (theme) {
+      case 'dark':
+        return <Moon className="w-4 h-4" />;
+      case 'light':
+        return <Sun className="w-4 h-4" />;
+      default:
+        return <Monitor className="w-4 h-4" />;
+    }
+  };
   return (
     <div className="p-4 space-y-6">
       <Card>
@@ -96,6 +109,37 @@ const Profile = () => {
             
             <div className="space-y-3">
               <h4 className="text-sm font-medium">App Settings</h4>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {getThemeIcon()}
+                  <span className="text-sm">Theme</span>
+                </div>
+                <Select value={theme} onValueChange={setTheme}>
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="light">
+                      <div className="flex items-center gap-2">
+                        <Sun className="w-4 h-4" />
+                        Light
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="dark">
+                      <div className="flex items-center gap-2">
+                        <Moon className="w-4 h-4" />
+                        Dark
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="system">
+                      <div className="flex items-center gap-2">
+                        <Monitor className="w-4 h-4" />
+                        System
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Bell className="w-4 h-4" />
