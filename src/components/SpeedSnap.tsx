@@ -214,8 +214,11 @@ const SpeedSnap: React.FC = () => {
 
       // Use dynamic targets based on units
       targets.speeds.forEach((target, index) => {
-        const key = targets.labels[index] as keyof typeof prev;
+        const key = targets.labels[index] as keyof TimingResults;
+        console.log(`Checking target ${key}: speed=${speed.toFixed(1)}, target=${target}, current=${prev[key]}`);
+        
         if (speed >= target && !prev[key]) {
+          console.log(`🎯 Target ${key} hit! Time: ${elapsed.toFixed(2)}s`);
           newTimes[key] = elapsed;
           setTargetHit(true);
           setHitTargetLabel(key);
