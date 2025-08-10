@@ -1,12 +1,15 @@
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { User, Settings, Trophy, Timer, MessageSquare, HelpCircle, Send, Bell, Smartphone, Globe } from 'lucide-react';
 
 const Profile = () => {
+  const [units, setUnits] = useState<'kmh' | 'mph'>('kmh');
   return (
     <div className="p-4 space-y-6">
       <Card>
@@ -71,7 +74,15 @@ const Profile = () => {
               <h4 className="text-sm font-medium">Measurement Settings</h4>
               <div className="flex items-center justify-between">
                 <span className="text-sm">Units</span>
-                <Badge variant="outline">km/h</Badge>
+                <Select value={units} onValueChange={(value: 'kmh' | 'mph') => setUnits(value)}>
+                  <SelectTrigger className="w-20">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="kmh">km/h</SelectItem>
+                    <SelectItem value="mph">mph</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm">Acceleration Threshold</span>
