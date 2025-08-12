@@ -298,13 +298,6 @@ const SpeedSnap: React.FC = () => {
 
   const handlePlacementGuideClose = useCallback(async () => {
     setShowPlacementGuide(false);
-    
-    // First request GPS permission
-    const hasPermission = await requestGPSPermission();
-    if (!hasPermission) {
-      console.log('❌ No GPS permission, cannot start');
-      return;
-    }
 
     // Initialize sensors and Kalman filter
     await initializeSensors();
