@@ -163,9 +163,11 @@ const SpeedSnap: React.FC = () => {
   
   console.log('✅ DEBUG: Enhanced sensor fusion hook initialized successfully');
 
-  // Intelligent measurement system with launch detection
-  const startIntelligentMeasurement = useCallback(async () => {
-    console.log('🧠 Starting intelligent measurement with launch detection');
+  // Manual start measurement with intelligent launch detection
+  const startMeasurement = useCallback(async () => {
+    if (isRunning || waitingForAcceleration) return;
+    
+    console.log('🚀 START button pressed - Intelligent launch detection mode');
     
     // Initialize sensors and tracking systems
     await initializeSensors();
@@ -197,28 +199,23 @@ const SpeedSnap: React.FC = () => {
     });
     setHasResults(false);
     
-    console.log('✅ Intelligent measurement ready - waiting for launch detection');
+    console.log('✅ Ready for launch detection - accelerate to start measurement');
     
     toast({
       title: "Ready for Launch!",
-      description: "System will detect when you start accelerating",
+      description: "Accelerate smoothly to start timing",
     });
-  }, [initializeSensors, initializeKalmanFilter, startTracking]);
+  }, [isRunning, waitingForAcceleration, initializeSensors, initializeKalmanFilter, startTracking]);
 
-  // Initialize sensors and permissions, then auto-start measurement
+  // Initialize sensors and permissions only
   useEffect(() => {
     const initializeApp = async () => {
       // Request GPS permission first
-      const gpsPermitted = await requestGPSPermission();
-      if (!gpsPermitted) return;
+      console.log('🔐 Requesting GPS permission...');
+      await requestGPSPermission();
 
       // Initialize sensor fusion
       const cleanup = await initializeSensors();
-      
-      // Start intelligent measurement system after sensor initialization
-      setTimeout(() => {
-        startIntelligentMeasurement();
-      }, 1000); // Small delay to ensure sensors are ready
       
       return cleanup;
     };
@@ -769,13 +766,22 @@ const SpeedSnap: React.FC = () => {
         {/* Control Buttons */}
         <div className="flex gap-3">
           <Button
-            onClick={stopMeasurement}
-            variant="destructive"
+            onClick={(isRunning || waitingForAcceleration) ? stopMeasurement : startMeasurement}
+            variant={(isRunning || waitingForAcceleration) ? "destructive" : "default"}
             className="flex-1 h-12 text-lg font-semibold"
-            disabled={true}
+            disabled={gpsStatus.includes('❌') || gpsStatus.includes('Requesting')}
           >
-            <Square className="w-5 h-5 mr-2" />
-            START (Disabled)
+            {(isRunning || waitingForAcceleration) ? (
+              <>
+                <Square className="w-5 h-5 mr-2" />
+                Stop
+              </>
+            ) : (
+              <>
+                <Play className="w-5 h-5 mr-2" />
+                Start
+              </>
+            )}
           </Button>
           
           <Button
