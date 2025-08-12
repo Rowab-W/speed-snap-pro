@@ -163,22 +163,20 @@ const SpeedSnap: React.FC = () => {
   
   console.log('✅ DEBUG: Enhanced sensor fusion hook initialized successfully');
 
-  // Auto-start measurement functionality (START button disabled)
-  const autoStartMeasurement = useCallback(async () => {
-    console.log('🚀 Auto-starting measurement - START button disabled mode');
+  // Intelligent measurement system with launch detection
+  const startIntelligentMeasurement = useCallback(async () => {
+    console.log('🧠 Starting intelligent measurement with launch detection');
     
-    // Start measurement automatically from standstill
+    // Initialize sensors and tracking systems
     await initializeSensors();
     initializeKalmanFilter();
-    
-    // Start high-frequency GPS tracking immediately
     startTracking();
     
-    // Set auto-start states (no manual trigger needed)
+    // Set ready state - waiting for intelligent launch detection
     setStartTriggered(true);
-    setWaitingForAcceleration(false); // Start measuring immediately
-    setIsMeasuring(true);
-    setIsRunning(true);
+    setWaitingForAcceleration(true); // Wait for launch detection
+    setIsMeasuring(false); // Not measuring until launch detected
+    setIsRunning(false); // Not running until launch detected
     setSpeed(0);
     setElapsedTime(0);
     setDistance(0);
@@ -199,15 +197,11 @@ const SpeedSnap: React.FC = () => {
     });
     setHasResults(false);
     
-    // Start timer immediately
-    startTimeRef.current = performance.now();
-    console.log('🕐 Auto-start time set:', startTimeRef.current);
-    
-    console.log('✅ Auto-measurement started from standstill');
+    console.log('✅ Intelligent measurement ready - waiting for launch detection');
     
     toast({
-      title: "Measurement Started!",
-      description: "Tracking from standstill automatically",
+      title: "Ready for Launch!",
+      description: "System will detect when you start accelerating",
     });
   }, [initializeSensors, initializeKalmanFilter, startTracking]);
 
@@ -221,9 +215,9 @@ const SpeedSnap: React.FC = () => {
       // Initialize sensor fusion
       const cleanup = await initializeSensors();
       
-      // Auto-start measurement after sensor initialization
+      // Start intelligent measurement system after sensor initialization
       setTimeout(() => {
-        autoStartMeasurement();
+        startIntelligentMeasurement();
       }, 1000); // Small delay to ensure sensors are ready
       
       return cleanup;

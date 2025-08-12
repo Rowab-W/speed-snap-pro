@@ -1,5 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { ExtendedKalmanFilter } from '../utils/ExtendedKalmanFilter';
+import { LaunchDetector } from '../utils/LaunchDetector';
+import { IMUFilters } from '../utils/ButterworthFilter';
 import { Motion } from '@capacitor/motion';
 import { toast } from '@/hooks/use-toast';
 
@@ -38,16 +40,23 @@ export const useEnhancedSensorFusion = ({
   const baselineAccelRef = useRef<number>(9.81);
   const calibrationSamplesRef = useRef<number[]>([]);
   const waitingForAccelerationRef = useRef<boolean>(false);
+  const launchDetectorRef = useRef<LaunchDetector | null>(null);
 
   useEffect(() => {
     waitingForAccelerationRef.current = waitingForAcceleration;
   }, [waitingForAcceleration]);
 
-  // Initialize Kalman Filter
+  // Initialize Kalman Filter and Launch Detector
   const initializeKalmanFilter = useCallback(() => {
     ekfRef.current = new ExtendedKalmanFilter();
-    console.log('🔬 Enhanced Kalman Filter initialized for improved sensor fusion');
-  }, []);
+    launchDetectorRef.current = new LaunchDetector({
+      horizontalAccelThreshold: accelerationThreshold,
+      speedThreshold: 3.0, // km/h
+      sustainedDurationMs: 300,
+      enableFiltering: true
+    });
+    console.log('🔬 Enhanced Kalman Filter and Launch Detector initialized');
+  }, [accelerationThreshold]);
 
   // Auto-calibration for IMU drift compensation
   const calibrateBaseline = useCallback(() => {
@@ -130,28 +139,46 @@ export const useEnhancedSensorFusion = ({
           const { x, y, z } = event.acceleration;
           const magnitude = Math.sqrt(x * x + y * y + z * z);
           
-          // Continuous calibration during stationary periods
-          if (magnitude > 8.5 && magnitude < 10.5) {
-            calibrationSamplesRef.current.push(magnitude);
+          // Apply Butterworth filtering to reduce noise
+          const filteredAcceleration = IMUFilters.filterAcceleration({ x, y, z });
+          
+          // Continuous calibration using filtered data
+          const filteredMagnitude = Math.sqrt(
+            filteredAcceleration.x * filteredAcceleration.x + 
+            filteredAcceleration.y * filteredAcceleration.y + 
+            filteredAcceleration.z * filteredAcceleration.z
+          );
+          
+          if (filteredMagnitude > 8.5 && filteredMagnitude < 10.5) {
+            calibrationSamplesRef.current.push(filteredMagnitude);
             if (calibrationSamplesRef.current.length > 100) {
               calibrationSamplesRef.current.shift();
             }
             calibrateBaseline();
           }
           
-          // Update sensor data
+          // Update sensor data with filtered values
           setSensorData(prev => ({
             speed: fusedSpeed,
-            acceleration: { x, y, z },
+            acceleration: filteredAcceleration,
             rotationRate: prev?.rotationRate || { alpha: 0, beta: 0, gamma: 0 },
             timestamp: Date.now(),
           }));
           
-          // Detect acceleration events
-          if (waitingForAccelerationRef.current) {
-            const netAcceleration = Math.abs(magnitude - baselineAccelRef.current);
-            if (netAcceleration > accelerationThreshold) {
-              console.log('🏃 Enhanced acceleration detected:', netAcceleration.toFixed(3), 'm/s²');
+          // Use launch detector for intelligent start detection
+          if (launchDetectorRef.current) {
+            const launchDetected = launchDetectorRef.current.processData(
+              {
+                x: filteredAcceleration.x,
+                y: filteredAcceleration.y,
+                z: filteredAcceleration.z,
+                timestamp: Date.now()
+              },
+              fusedSpeed
+            );
+
+            if (launchDetected && onAccelerationDetected) {
+              console.log('🚀 Launch detected by intelligent detection system (Capacitor)!');
               onAccelerationDetected();
             }
           }
@@ -165,31 +192,60 @@ export const useEnhancedSensorFusion = ({
         const handleDeviceMotion = (event: DeviceMotionEvent) => {
           if (!event.accelerationIncludingGravity) return;
           
-          const { x = 0, y = 0, z = 0 } = event.accelerationIncludingGravity;
+          const rawAcceleration = event.accelerationIncludingGravity;
+          const { x = 0, y = 0, z = 0 } = rawAcceleration;
           const magnitude = Math.sqrt(x * x + y * y + z * z);
           
-          // Continuous calibration
-          if (magnitude > 8.5 && magnitude < 10.5) {
-            calibrationSamplesRef.current.push(magnitude);
+          // Apply Butterworth filtering to reduce noise
+          const filteredAcceleration = IMUFilters.filterAcceleration({ x, y, z });
+          const rotationRate = event.rotationRate || { alpha: 0, beta: 0, gamma: 0 };
+          const filteredRotation = IMUFilters.filterGyroscope({ 
+            x: rotationRate.alpha || 0, 
+            y: rotationRate.beta || 0, 
+            z: rotationRate.gamma || 0 
+          });
+          
+          // Continuous calibration using filtered data
+          const filteredMagnitude = Math.sqrt(
+            filteredAcceleration.x * filteredAcceleration.x + 
+            filteredAcceleration.y * filteredAcceleration.y + 
+            filteredAcceleration.z * filteredAcceleration.z
+          );
+          
+          if (filteredMagnitude > 8.5 && filteredMagnitude < 10.5) {
+            calibrationSamplesRef.current.push(filteredMagnitude);
             if (calibrationSamplesRef.current.length > 100) {
               calibrationSamplesRef.current.shift();
             }
             calibrateBaseline();
           }
           
-          // Update sensor data with rotation rate
+          // Update sensor data with filtered values
           setSensorData({
             speed: fusedSpeed,
-            acceleration: { x, y, z },
-            rotationRate: event.rotationRate || { alpha: 0, beta: 0, gamma: 0 },
+            acceleration: filteredAcceleration,
+            rotationRate: {
+              alpha: filteredRotation.x,
+              beta: filteredRotation.y,
+              gamma: filteredRotation.z
+            },
             timestamp: Date.now(),
           });
           
-          // Detect acceleration events
-          if (waitingForAccelerationRef.current) {
-            const netAcceleration = Math.abs(magnitude - baselineAccelRef.current);
-            if (netAcceleration > accelerationThreshold) {
-              console.log('🏃 Enhanced acceleration detected (browser):', netAcceleration.toFixed(3), 'm/s²');
+          // Use launch detector for intelligent start detection
+          if (launchDetectorRef.current) {
+            const launchDetected = launchDetectorRef.current.processData(
+              {
+                x: filteredAcceleration.x,
+                y: filteredAcceleration.y,
+                z: filteredAcceleration.z,
+                timestamp: Date.now()
+              },
+              fusedSpeed
+            );
+
+            if (launchDetected && onAccelerationDetected) {
+              console.log('🚀 Launch detected by intelligent detection system (browser)!');
               onAccelerationDetected();
             }
           }
@@ -234,7 +290,11 @@ export const useEnhancedSensorFusion = ({
     startTimeRef.current = null;
     lastTimestampRef.current = null;
     ekfRef.current?.reset();
-    console.log('🔄 Enhanced sensor fusion reset');
+    launchDetectorRef.current?.reset();
+    IMUFilters.accelerationLowPass.reset();
+    IMUFilters.accelerationHighPass.reset();
+    IMUFilters.gyroscopeLowPass.reset();
+    console.log('🔄 Enhanced sensor fusion and filters reset');
   }, [stopTracking]);
 
   // Update Kalman filter
