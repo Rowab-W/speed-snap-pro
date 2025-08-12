@@ -79,6 +79,14 @@ export const useEnhancedSensorFusion = ({
     const predictionError = gpsSpeed - imuVelocityRef.current;
     const newFusedSpeed = imuVelocityRef.current + kalmanGainRef.current * predictionError;
     
+    console.log('Fusion:', { 
+      gpsSpeed: gpsSpeed.toFixed(2), 
+      imuVelocity: imuVelocityRef.current.toFixed(2), 
+      predictionError: predictionError.toFixed(2), 
+      newFusedSpeed: newFusedSpeed.toFixed(2),
+      kalmanGain: kalmanGainRef.current 
+    });
+    
     // Correct IMU drift by updating velocity estimate
     imuVelocityRef.current = newFusedSpeed;
     fusedSpeedRef.current = newFusedSpeed;
@@ -121,6 +129,13 @@ export const useEnhancedSensorFusion = ({
         const gpsSpeedMs = position.coords.speed || 0; // m/s
         const gpsSpeedKmh = gpsSpeedMs * 3.6; // Convert to km/h
         lastGpsSpeedRef.current = gpsSpeedMs;
+        
+        console.log('GPS Update:', { 
+          speedMs: gpsSpeedMs, 
+          speedKmh: gpsSpeedKmh.toFixed(1),
+          accuracy: position.coords.accuracy, 
+          timestamp: position.timestamp 
+        });
         
         // Use EKF if available for additional processing
         if (ekfRef.current) {
@@ -177,6 +192,16 @@ export const useEnhancedSensorFusion = ({
             if (deltaTime > 0.001 && deltaTime < 0.5) { // Reasonable time delta (1ms to 500ms)
               // Use horizontal acceleration for fusion (remove gravity component)
               const netHorizontalAccel = horizontalAccel - 0.5; // Small bias removal
+              
+              console.log('IMU Update:', { 
+                rawAccel: event.acceleration, 
+                filteredAccel: filteredAcceleration,
+                horizontalAccel: horizontalAccel.toFixed(3),
+                netHorizontalAccel: netHorizontalAccel.toFixed(3),
+                deltaTime: deltaTime.toFixed(3), 
+                currentImuVelocity: imuVelocityRef.current.toFixed(2) 
+              });
+              
               fuseData(lastGpsSpeedRef.current, Math.max(0, netHorizontalAccel), deltaTime);
             }
           }
@@ -258,6 +283,16 @@ export const useEnhancedSensorFusion = ({
             if (deltaTime > 0.001 && deltaTime < 0.5) { // Reasonable time delta
               // Use horizontal acceleration for fusion (remove gravity component)
               const netHorizontalAccel = horizontalAccel - 0.5; // Small bias removal
+              
+              console.log('IMU Update (Browser):', { 
+                rawAccel: { x, y, z }, 
+                filteredAccel: filteredAcceleration,
+                horizontalAccel: horizontalAccel.toFixed(3),
+                netHorizontalAccel: netHorizontalAccel.toFixed(3),
+                deltaTime: deltaTime.toFixed(3), 
+                currentImuVelocity: imuVelocityRef.current.toFixed(2) 
+              });
+              
               fuseData(lastGpsSpeedRef.current, Math.max(0, netHorizontalAccel), deltaTime);
             }
           }
