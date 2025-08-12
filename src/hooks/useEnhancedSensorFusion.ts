@@ -124,43 +124,81 @@ export const useEnhancedSensorFusion = ({
 
     setGpsStatus('Requesting GPS permission...');
     
-    geoWatchRef.current = navigator.geolocation.watchPosition(
-      (position) => {
-        const gpsSpeedMs = position.coords.speed || 0; // m/s
-        const gpsSpeedKmh = gpsSpeedMs * 3.6; // Convert to km/h
-        lastGpsSpeedRef.current = gpsSpeedMs;
-        
-        console.log('GPS Update:', { 
-          speedMs: gpsSpeedMs, 
-          speedKmh: gpsSpeedKmh.toFixed(1),
-          accuracy: position.coords.accuracy, 
-          timestamp: position.timestamp 
-        });
-        
-        // Use EKF if available for additional processing
-        if (ekfRef.current) {
-          const currentTime = Date.now();
-          const dt = lastTimestampRef.current ? (currentTime - lastTimestampRef.current) / 1000 : 0.016;
-          
-          if (dt > 0 && dt < 1) { // Reasonable time delta
-            ekfRef.current.predict(dt);
-            const ekfSpeed = ekfRef.current.update([gpsSpeedKmh, 0]); // No direct acceleration from GPS
-            console.log('📍 GPS + EKF speed:', ekfSpeed.toFixed(1), 'km/h');
-          }
-        }
-        
-        console.log('📍 GPS speed update:', gpsSpeedKmh.toFixed(1), 'km/h');
-        setGpsStatus('✅ GPS Ready');
-      },
-      (error) => {
-        console.error('❌ GPS error:', error);
-        setGpsStatus('❌ No GPS');
-      },
-      {
-        enableHighAccuracy: true,
-        maximumAge: 100, // Very fresh data
-        timeout: 5000
+    const gpsOptions = {
+      enableHighAccuracy: true,
+      maximumAge: 0,
+      timeout: 5000
+    };
+
+    const handleGpsSuccess = (position: GeolocationPosition) => {
+      const gpsSpeedMs = position.coords.speed || 0; // m/s
+      const gpsSpeedKmh = gpsSpeedMs * 3.6; // Convert to km/h
+      const accuracy = position.coords.accuracy || 0;
+      
+      console.log('GPS Update:', { 
+        speedMs: gpsSpeedMs, 
+        speedKmh: gpsSpeedKmh.toFixed(1),
+        accuracy: accuracy, 
+        timestamp: position.timestamp 
+      });
+      
+      // Ignore GPS readings with poor accuracy (> 10 meters)
+      if (accuracy > 10) {
+        console.warn('GPS accuracy too low:', accuracy, 'meters - ignoring reading');
+        return;
       }
+      
+      lastGpsSpeedRef.current = gpsSpeedMs;
+      
+      // Use EKF if available for additional processing
+      if (ekfRef.current) {
+        const currentTime = Date.now();
+        const dt = lastTimestampRef.current ? (currentTime - lastTimestampRef.current) / 1000 : 0.016;
+        
+        if (dt > 0 && dt < 1) { // Reasonable time delta
+          ekfRef.current.predict(dt);
+          const ekfSpeed = ekfRef.current.update([gpsSpeedKmh, 0]); // No direct acceleration from GPS
+          console.log('📍 GPS + EKF speed:', ekfSpeed.toFixed(1), 'km/h');
+        }
+      }
+      
+      console.log('📍 GPS speed update:', gpsSpeedKmh.toFixed(1), 'km/h');
+      setGpsStatus('✅ GPS Ready');
+    };
+
+    const handleGpsError = (error: GeolocationPositionError) => {
+      console.error('GPS Error:', error.message);
+      
+      // Provide user feedback for specific error types
+      if (error.code === 3) { // TIMEOUT
+        console.warn('GPS timeout - Move outdoors for better GPS signal');
+        toast({
+          title: "GPS Timeout",
+          description: "Move outdoors for better GPS signal",
+          variant: "destructive",
+        });
+      } else if (error.code === 2) { // POSITION_UNAVAILABLE
+        console.warn('GPS position unavailable - Move outdoors for better GPS signal');
+        toast({
+          title: "GPS Unavailable", 
+          description: "Move outdoors for better GPS signal",
+          variant: "destructive",
+        });
+      } else if (error.code === 1) { // PERMISSION_DENIED
+        console.error('GPS permission denied - Please enable location services');
+        toast({
+          title: "GPS Permission Denied",
+          description: "Please enable location services",
+          variant: "destructive",
+        });
+      }
+      setGpsStatus('❌ No GPS');
+    };
+
+    geoWatchRef.current = navigator.geolocation.watchPosition(
+      handleGpsSuccess,
+      handleGpsError,
+      gpsOptions
     );
   }, [isRunning, onSpeedUpdate, onDataPointAdded, sensorData]);
 
