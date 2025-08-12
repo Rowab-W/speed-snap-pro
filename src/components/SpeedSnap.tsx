@@ -163,7 +163,55 @@ const SpeedSnap: React.FC = () => {
   
   console.log('✅ DEBUG: Enhanced sensor fusion hook initialized successfully');
 
-  // Initialize sensors and permissions
+  // Auto-start measurement functionality (START button disabled)
+  const autoStartMeasurement = useCallback(async () => {
+    console.log('🚀 Auto-starting measurement - START button disabled mode');
+    
+    // Start measurement automatically from standstill
+    await initializeSensors();
+    initializeKalmanFilter();
+    
+    // Start high-frequency GPS tracking immediately
+    startTracking();
+    
+    // Set auto-start states (no manual trigger needed)
+    setStartTriggered(true);
+    setWaitingForAcceleration(false); // Start measuring immediately
+    setIsMeasuring(true);
+    setIsRunning(true);
+    setSpeed(0);
+    setElapsedTime(0);
+    setDistance(0);
+    setDataPoints([]);
+    setTimes({
+      '0-20': null,
+      '0-30': null,
+      '0-40': null,
+      '0-60': null,
+      '0-80': null,
+      '0-100': null,
+      '0-120': null,
+      '0-130': null,
+      '0-200': null,
+      '0-250': null,
+      quarterMile: null,
+      halfMile: null,
+    });
+    setHasResults(false);
+    
+    // Start timer immediately
+    startTimeRef.current = performance.now();
+    console.log('🕐 Auto-start time set:', startTimeRef.current);
+    
+    console.log('✅ Auto-measurement started from standstill');
+    
+    toast({
+      title: "Measurement Started!",
+      description: "Tracking from standstill automatically",
+    });
+  }, [initializeSensors, initializeKalmanFilter, startTracking]);
+
+  // Initialize sensors and permissions, then auto-start measurement
   useEffect(() => {
     const initializeApp = async () => {
       // Request GPS permission first
@@ -172,7 +220,11 @@ const SpeedSnap: React.FC = () => {
 
       // Initialize sensor fusion
       const cleanup = await initializeSensors();
-      // Motion sensors already initialized
+      
+      // Auto-start measurement after sensor initialization
+      setTimeout(() => {
+        autoStartMeasurement();
+      }, 1000); // Small delay to ensure sensors are ready
       
       return cleanup;
     };
@@ -260,50 +312,6 @@ const SpeedSnap: React.FC = () => {
     });
   }, [distance, elapsedTime, isRunning]);
 
-  // Dragy-style measurement start without placement guide
-  const startMeasurement = useCallback(async () => {
-    if (isRunning || waitingForAcceleration) return;
-    
-    console.log('🚀 START button pressed - Dragy mode activated');
-    
-    // Start measurement directly without placement guide
-    await initializeSensors();
-    initializeKalmanFilter();
-    
-    // Start high-frequency GPS tracking immediately
-    startTracking();
-    
-    // Set Dragy-style states
-    setStartTriggered(true);
-    setWaitingForAcceleration(true);
-    setSpeed(0);
-    setElapsedTime(0);
-    setDistance(0);
-    setDataPoints([]);
-    setTimes({
-      '0-20': null,
-      '0-30': null,
-      '0-40': null,
-      '0-60': null,
-      '0-80': null,
-      '0-100': null,
-      '0-120': null,
-      '0-130': null,
-      '0-200': null,
-      '0-250': null,
-      quarterMile: null,
-      halfMile: null,
-    });
-    setHasResults(false);
-    // GPS status managed by enhanced sensor fusion
-    
-    console.log('✅ Dragy mode ready - waiting for acceleration trigger');
-    
-    toast({
-      title: "Ready to Launch!",
-      description: "Accelerate smoothly to start measurement",
-    });
-  }, [isRunning, waitingForAcceleration, initializeSensors, initializeKalmanFilter, startTracking]);
 
   const handlePlacementGuideClose = useCallback(async () => {
     setShowPlacementGuide(false);
@@ -767,22 +775,13 @@ const SpeedSnap: React.FC = () => {
         {/* Control Buttons */}
         <div className="flex gap-3">
           <Button
-            onClick={(isRunning || waitingForAcceleration) ? stopMeasurement : startMeasurement}
-            variant={(isRunning || waitingForAcceleration) ? "destructive" : "default"}
+            onClick={stopMeasurement}
+            variant="destructive"
             className="flex-1 h-12 text-lg font-semibold"
-            disabled={gpsStatus.includes('❌') || gpsStatus.includes('Requesting')}
+            disabled={true}
           >
-            {(isRunning || waitingForAcceleration) ? (
-              <>
-                <Square className="w-5 h-5 mr-2" />
-                Stop
-              </>
-            ) : (
-              <>
-                <Play className="w-5 h-5 mr-2" />
-                Start
-              </>
-            )}
+            <Square className="w-5 h-5 mr-2" />
+            START (Disabled)
           </Button>
           
           <Button
