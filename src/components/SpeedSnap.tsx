@@ -8,8 +8,7 @@ import { useUnits } from '@/contexts/UnitsContext';
 import SpeedChart from './SpeedChart';
 import { CubicSpline } from '../utils/CubicSpline';
 import { MultiPassInterpolator } from '../utils/DataProcessing';
-import { useSensorFusion } from '../hooks/useSensorFusion';
-import { useGPSTracking } from '../hooks/useGPSTracking';
+import { useEnhancedSensorFusion } from '../hooks/useEnhancedSensorFusion';
 import { MeasurementDisplay } from './MeasurementDisplay';
 import { ResultsPanel } from './ResultsPanel';
 import { PlacementGuide } from './PlacementGuide';
@@ -113,13 +112,9 @@ const SpeedSnap: React.FC = () => {
       console.log('🕐 Start time set:', startTimeRef.current);
       
       initializeKalmanFilter();
-      resetGPSTracking();
+      resetTracking();
       
-      startGPSTracking({
-        enableHighAccuracy: true,
-        maximumAge: 0,
-        timeout: 10000,
-      });
+      startTracking();
       
       console.log('📍 GPS tracking started with high accuracy');
     } else {
@@ -127,68 +122,41 @@ const SpeedSnap: React.FC = () => {
     }
   }, [startTriggered]);
 
-  // Initialize sensor fusion hook
-  const {
-    initializeSensors,
-    initializeKalmanFilter,
-    updateKalmanFilter,
-    getAccelerometerData,
-    resetSensorFusion,
-    waitingForAccelerationRef
-  } = useSensorFusion({
-    onAccelerationDetected: handleAccelerationDetected,
-    waitingForAcceleration,
-    accelerationThreshold: 0.3  // Dragy-like threshold for reliable detection
-  });
-
-  // Handle speed updates from GPS - show speed when GPS is active
-  const handleSpeedUpdate = useCallback((newSpeed: number) => {
-    console.log('🏃 Speed update received:', newSpeed.toFixed(2), 'km/h, isMeasuring:', isMeasuring, 'waitingForAcceleration:', waitingForAcceleration);
-    
-    // CRITICAL FIX: Always show speed when GPS is providing data (for real-time feedback)
-    console.log('✅ Setting speed to:', newSpeed.toFixed(2), 'km/h');
-    setSpeed(newSpeed);
-    
-    // If we're getting speed while waiting for acceleration, auto-trigger measurement
-    if (waitingForAcceleration && newSpeed > 1 && startTriggered) {
-      console.log('🚀 Speed detected while waiting for acceleration - auto-starting measurement');
-      handleAccelerationDetected();
-    }
-  }, [isMeasuring, waitingForAcceleration, startTriggered, handleAccelerationDetected]);
-
   // Handle data point additions
   const handleDataPointAdded = useCallback((dataPoint: DataPoint) => {
     console.log('📊 Data point added:', dataPoint);
     setDataPoints(prev => [...prev, dataPoint]);
   }, []);
 
-  // Handle distance updates
-  const handleDistanceUpdate = useCallback((additionalDistance: number) => {
-    setDistance(prev => prev + additionalDistance);
-  }, []);
-
-  // Handle GPS accuracy updates
-  const handleGpsAccuracyUpdate = useCallback((accuracy: number) => {
-    setGpsAccuracy(accuracy);
-  }, []);
-
-  // Initialize GPS tracking hook
+  // Initialize enhanced sensor fusion hook with Grok's improvements
   const {
+    sensorData,
+    fusedSpeed,
     gpsStatus,
     requestGPSPermission,
-    startGPSTracking,
-    stopGPSTracking,
-    resetGPSTracking,
-    setGpsStatus
-  } = useGPSTracking({
-    isRunning,
-    startTime: startTimeRef.current,
+    initializeSensors,
+    initializeKalmanFilter,
+    startTracking,
+    stopTracking,
+    resetTracking,
     updateKalmanFilter,
-    getAccelerometerData,
-    onSpeedUpdate: handleSpeedUpdate,
-    onDataPointAdded: handleDataPointAdded,
-    onDistanceUpdate: handleDistanceUpdate,
-    onGpsAccuracyUpdate: handleGpsAccuracyUpdate
+    getAccelerometerData
+  } = useEnhancedSensorFusion({
+    onAccelerationDetected: handleAccelerationDetected,
+    waitingForAcceleration,
+    accelerationThreshold: 0.3,
+    isRunning,
+    onSpeedUpdate: (newSpeed: number) => {
+      console.log('🏃 Enhanced speed update:', newSpeed.toFixed(2), 'km/h');
+      setSpeed(newSpeed);
+      
+      // Auto-trigger measurement if waiting for acceleration
+      if (waitingForAcceleration && newSpeed > 1 && startTriggered) {
+        console.log('🚀 Speed detected while waiting - auto-starting measurement');
+        handleAccelerationDetected();
+      }
+    },
+    onDataPointAdded: handleDataPointAdded
   });
 
   // Initialize sensors and permissions
@@ -200,7 +168,7 @@ const SpeedSnap: React.FC = () => {
 
       // Initialize sensor fusion
       const cleanup = await initializeSensors();
-      setGpsStatus(prev => prev + ' ✅ Motion sensors active.');
+      // Motion sensors already initialized
       
       return cleanup;
     };
@@ -299,12 +267,11 @@ const SpeedSnap: React.FC = () => {
     initializeKalmanFilter();
     
     // Start high-frequency GPS tracking immediately
-    startGPSTracking();
+    startTracking();
     
     // Set Dragy-style states
     setStartTriggered(true);
     setWaitingForAcceleration(true);
-    waitingForAccelerationRef.current = true;
     setSpeed(0);
     setElapsedTime(0);
     setDistance(0);
@@ -324,7 +291,7 @@ const SpeedSnap: React.FC = () => {
       halfMile: null,
     });
     setHasResults(false);
-    setGpsStatus('Dragy mode ready - waiting for acceleration...');
+    // GPS status managed by enhanced sensor fusion
     
     console.log('✅ Dragy mode ready - waiting for acceleration trigger');
     
@@ -332,7 +299,7 @@ const SpeedSnap: React.FC = () => {
       title: "Ready to Launch!",
       description: "Accelerate smoothly to start measurement",
     });
-  }, [isRunning, waitingForAcceleration, initializeSensors, initializeKalmanFilter, startGPSTracking]);
+  }, [isRunning, waitingForAcceleration, initializeSensors, initializeKalmanFilter, startTracking]);
 
   const handlePlacementGuideClose = useCallback(async () => {
     setShowPlacementGuide(false);
@@ -342,12 +309,11 @@ const SpeedSnap: React.FC = () => {
     initializeKalmanFilter();
     
     // Start high-frequency GPS tracking immediately
-    startGPSTracking();
+    startTracking();
     
     // Set Dragy-style states
     setStartTriggered(true);
     setWaitingForAcceleration(true);
-    waitingForAccelerationRef.current = true;
     setSpeed(0);
     setElapsedTime(0);
     setDistance(0);
@@ -367,7 +333,7 @@ const SpeedSnap: React.FC = () => {
       halfMile: null,
     });
     setHasResults(false);
-    setGpsStatus('Dragy mode ready - waiting for acceleration...');
+    // GPS status managed by enhanced sensor fusion
     
     console.log('✅ Dragy mode ready - waiting for acceleration trigger');
     
@@ -375,7 +341,7 @@ const SpeedSnap: React.FC = () => {
       title: "Ready to Launch!",
       description: "Accelerate smoothly to start measurement",
     });
-  }, [requestGPSPermission, initializeSensors, initializeKalmanFilter, startGPSTracking]);
+  }, [requestGPSPermission, initializeSensors, initializeKalmanFilter, startTracking]);
 
   // Stop measurement (Grok's logic implementation)
   const stopMeasurement = useCallback(() => {
@@ -387,10 +353,10 @@ const SpeedSnap: React.FC = () => {
     setIsRunning(false);
     setWaitingForAcceleration(false);
     setSpeed(0); // Set speed display = "0 km/h"
-    setGpsStatus('Processing results...');
+    // GPS status managed by enhanced sensor fusion
     startTimeRef.current = null; // Reset timer
 
-    stopGPSTracking();
+    stopTracking();
 
     // Advanced post-processing with multi-pass interpolation
     if (dataPoints.length >= 4) {
@@ -481,14 +447,14 @@ const SpeedSnap: React.FC = () => {
     // Save performance record to database
     savePerformanceRecord();
     
-    setGpsStatus('Measurement complete');
+    // GPS status managed by enhanced sensor fusion
     setHasResults(true);
     
     toast({
       title: "Measurement Complete",
       description: "Check your results below!",
     });
-  }, [isRunning, waitingForAcceleration, dataPoints, stopGPSTracking]);
+  }, [isRunning, waitingForAcceleration, dataPoints, stopTracking]);
 
   // Save performance record to database
   const savePerformanceRecord = async () => {
@@ -555,14 +521,13 @@ const SpeedSnap: React.FC = () => {
     });
     setHasResults(false);
     
-    resetSensorFusion();
-    resetGPSTracking();
+    resetTracking();
     
     toast({
       title: "Reset Complete",
       description: "Ready for next measurement",
     });
-  }, [isRunning, waitingForAcceleration, stopMeasurement, resetSensorFusion, resetGPSTracking]);
+  }, [isRunning, waitingForAcceleration, stopMeasurement, resetTracking]);
 
   // Export results
   const exportResults = useCallback(() => {
