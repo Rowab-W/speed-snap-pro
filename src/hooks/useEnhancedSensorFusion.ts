@@ -33,6 +33,7 @@ export const useEnhancedSensorFusion = ({
   const [fusedSpeed, setFusedSpeed] = useState(0);
   const [gpsStatus, setGpsStatus] = useState<string>('Initializing...');
 
+  // Refs for sensor fusion state
   const ekfRef = useRef<ExtendedKalmanFilter | null>(null);
   const geoWatchRef = useRef<number | null>(null);
   const startTimeRef = useRef<number | null>(null);
@@ -41,6 +42,13 @@ export const useEnhancedSensorFusion = ({
   const calibrationSamplesRef = useRef<number[]>([]);
   const waitingForAccelerationRef = useRef<boolean>(false);
   const launchDetectorRef = useRef<LaunchDetector | null>(null);
+  
+  // Grok's simplified sensor fusion state
+  const prevTimestampRef = useRef<number>(0);
+  const imuVelocityRef = useRef<number>(0); // Integrated from accel (m/s)
+  const kalmanGainRef = useRef<number>(0.3); // Tune: higher trusts IMU more
+  const lastGpsSpeedRef = useRef<number>(0);
+  const fusedSpeedRef = useRef<number>(0);
 
   useEffect(() => {
     waitingForAccelerationRef.current = waitingForAcceleration;
@@ -57,6 +65,38 @@ export const useEnhancedSensorFusion = ({
     });
     console.log('🔬 Enhanced Kalman Filter and Launch Detector initialized');
   }, [accelerationThreshold]);
+
+  // Grok's simplified sensor fusion implementation
+  const fuseData = useCallback((gpsSpeedMs: number, imuAccelMs2: number, deltaTime: number) => {
+    // Convert GPS speed from m/s to internal calculation (keep as m/s for precision)
+    const gpsSpeed = gpsSpeedMs;
+    
+    // Integrate IMU acceleration to velocity (after gravity removal and filtering)
+    // Simplified assumption: use horizontal acceleration magnitude
+    imuVelocityRef.current += imuAccelMs2 * deltaTime;
+    
+    // Apply Kalman-style fusion
+    const predictionError = gpsSpeed - imuVelocityRef.current;
+    const newFusedSpeed = imuVelocityRef.current + kalmanGainRef.current * predictionError;
+    
+    // Correct IMU drift by updating velocity estimate
+    imuVelocityRef.current = newFusedSpeed;
+    fusedSpeedRef.current = newFusedSpeed;
+    
+    // Convert back to km/h for display and set state
+    const fusedSpeedKmh = Math.max(0, newFusedSpeed * 3.6);
+    setFusedSpeed(fusedSpeedKmh);
+    
+    console.log('🔗 Sensor fusion:', {
+      gpsKmh: (gpsSpeed * 3.6).toFixed(1),
+      imuMs: imuVelocityRef.current.toFixed(2),
+      fusedKmh: fusedSpeedKmh.toFixed(1),
+      gain: kalmanGainRef.current,
+      deltaT: deltaTime.toFixed(3)
+    });
+    
+    return fusedSpeedKmh;
+  }, []);
 
   // Auto-calibration for IMU drift compensation
   const calibrateBaseline = useCallback(() => {
@@ -76,54 +116,35 @@ export const useEnhancedSensorFusion = ({
 
     setGpsStatus('Requesting GPS permission...');
     
-    // Use watchPosition for continuous high-accuracy updates
     geoWatchRef.current = navigator.geolocation.watchPosition(
-      (pos) => {
-        const gpsSpeed = pos.coords.speed ? pos.coords.speed * 3.6 : 0; // m/s to km/h
-        const timestamp = Date.now();
+      (position) => {
+        const gpsSpeedMs = position.coords.speed || 0; // m/s
+        const gpsSpeedKmh = gpsSpeedMs * 3.6; // Convert to km/h
+        lastGpsSpeedRef.current = gpsSpeedMs;
         
-        if (isRunning && startTimeRef.current) {
-          const elapsedTime = (timestamp - startTimeRef.current) / 1000;
+        // Use EKF if available for additional processing
+        if (ekfRef.current) {
+          const currentTime = Date.now();
+          const dt = lastTimestampRef.current ? (currentTime - lastTimestampRef.current) / 1000 : 0.016;
           
-          // Fuse GPS speed with sensor data if Kalman filter is available
-          if (ekfRef.current && sensorData) {
-            const accelMagnitude = Math.sqrt(
-              sensorData.acceleration.x ** 2 + 
-              sensorData.acceleration.y ** 2 + 
-              sensorData.acceleration.z ** 2
-            );
-            
-            const dt = lastTimestampRef.current ? (timestamp - lastTimestampRef.current) / 1000 : 0.1;
+          if (dt > 0 && dt < 1) { // Reasonable time delta
             ekfRef.current.predict(dt);
-            const filteredSpeed = ekfRef.current.update([gpsSpeed, accelMagnitude]);
-            
-            setFusedSpeed(filteredSpeed);
-            onSpeedUpdate(filteredSpeed);
-            onDataPointAdded({ time: elapsedTime, speed: filteredSpeed });
-          } else {
-            setFusedSpeed(gpsSpeed);
-            onSpeedUpdate(gpsSpeed);
-            onDataPointAdded({ time: elapsedTime, speed: gpsSpeed });
+            const ekfSpeed = ekfRef.current.update([gpsSpeedKmh, 0]); // No direct acceleration from GPS
+            console.log('📍 GPS + EKF speed:', ekfSpeed.toFixed(1), 'km/h');
           }
-          
-          lastTimestampRef.current = timestamp;
         }
         
-        setGpsStatus(`GPS: ±${pos.coords.accuracy?.toFixed(1)}m`);
+        console.log('📍 GPS speed update:', gpsSpeedKmh.toFixed(1), 'km/h');
+        setGpsStatus('✅ GPS Ready');
       },
-      (err) => {
-        console.error('GPS error:', err);
-        setGpsStatus('GPS Error');
-        toast({
-          title: "GPS Error",
-          description: "Failed to get GPS data. Please check permissions.",
-          variant: "destructive",
-        });
+      (error) => {
+        console.error('❌ GPS error:', error);
+        setGpsStatus('❌ No GPS');
       },
-      { 
-        enableHighAccuracy: true, 
-        maximumAge: 0, 
-        timeout: 5000 
+      {
+        enableHighAccuracy: true,
+        maximumAge: 100, // Very fresh data
+        timeout: 5000
       }
     );
   }, [isRunning, onSpeedUpdate, onDataPointAdded, sensorData]);
@@ -138,11 +159,30 @@ export const useEnhancedSensorFusion = ({
         Motion.addListener('accel', (event) => {
           const { x, y, z } = event.acceleration;
           const magnitude = Math.sqrt(x * x + y * y + z * z);
+          const currentTime = Date.now();
           
           // Apply Butterworth filtering to reduce noise
           const filteredAcceleration = IMUFilters.filterAcceleration({ x, y, z });
           
-          // Continuous calibration using filtered data
+          // Calculate horizontal acceleration for sensor fusion
+          const horizontalAccel = Math.sqrt(
+            filteredAcceleration.x * filteredAcceleration.x + 
+            filteredAcceleration.y * filteredAcceleration.y
+          );
+          
+          // Grok's sensor fusion with time management
+          if (prevTimestampRef.current > 0) {
+            const deltaTime = (currentTime - prevTimestampRef.current) / 1000; // Convert to seconds
+            
+            if (deltaTime > 0.001 && deltaTime < 0.5) { // Reasonable time delta (1ms to 500ms)
+              // Use horizontal acceleration for fusion (remove gravity component)
+              const netHorizontalAccel = horizontalAccel - 0.5; // Small bias removal
+              fuseData(lastGpsSpeedRef.current, Math.max(0, netHorizontalAccel), deltaTime);
+            }
+          }
+          prevTimestampRef.current = currentTime;
+          
+          // Continuous calibration using filtered magnitude
           const filteredMagnitude = Math.sqrt(
             filteredAcceleration.x * filteredAcceleration.x + 
             filteredAcceleration.y * filteredAcceleration.y + 
@@ -159,10 +199,10 @@ export const useEnhancedSensorFusion = ({
           
           // Update sensor data with filtered values
           setSensorData(prev => ({
-            speed: fusedSpeed,
+            speed: fusedSpeedRef.current * 3.6, // Use fused speed in km/h
             acceleration: filteredAcceleration,
             rotationRate: prev?.rotationRate || { alpha: 0, beta: 0, gamma: 0 },
-            timestamp: Date.now(),
+            timestamp: currentTime,
           }));
           
           // Use launch detector for intelligent start detection
@@ -172,9 +212,9 @@ export const useEnhancedSensorFusion = ({
                 x: filteredAcceleration.x,
                 y: filteredAcceleration.y,
                 z: filteredAcceleration.z,
-                timestamp: Date.now()
+                timestamp: currentTime
               },
-              fusedSpeed
+              fusedSpeedRef.current * 3.6 // Current fused speed in km/h
             );
 
             if (launchDetected && onAccelerationDetected) {
@@ -194,7 +234,7 @@ export const useEnhancedSensorFusion = ({
           
           const rawAcceleration = event.accelerationIncludingGravity;
           const { x = 0, y = 0, z = 0 } = rawAcceleration;
-          const magnitude = Math.sqrt(x * x + y * y + z * z);
+          const currentTime = Date.now();
           
           // Apply Butterworth filtering to reduce noise
           const filteredAcceleration = IMUFilters.filterAcceleration({ x, y, z });
@@ -204,6 +244,24 @@ export const useEnhancedSensorFusion = ({
             y: rotationRate.beta || 0, 
             z: rotationRate.gamma || 0 
           });
+          
+          // Calculate horizontal acceleration for sensor fusion
+          const horizontalAccel = Math.sqrt(
+            filteredAcceleration.x * filteredAcceleration.x + 
+            filteredAcceleration.y * filteredAcceleration.y
+          );
+          
+          // Grok's sensor fusion with time management
+          if (prevTimestampRef.current > 0) {
+            const deltaTime = (currentTime - prevTimestampRef.current) / 1000; // Convert to seconds
+            
+            if (deltaTime > 0.001 && deltaTime < 0.5) { // Reasonable time delta
+              // Use horizontal acceleration for fusion (remove gravity component)
+              const netHorizontalAccel = horizontalAccel - 0.5; // Small bias removal
+              fuseData(lastGpsSpeedRef.current, Math.max(0, netHorizontalAccel), deltaTime);
+            }
+          }
+          prevTimestampRef.current = currentTime;
           
           // Continuous calibration using filtered data
           const filteredMagnitude = Math.sqrt(
@@ -222,14 +280,14 @@ export const useEnhancedSensorFusion = ({
           
           // Update sensor data with filtered values
           setSensorData({
-            speed: fusedSpeed,
+            speed: fusedSpeedRef.current * 3.6, // Use fused speed in km/h
             acceleration: filteredAcceleration,
             rotationRate: {
               alpha: filteredRotation.x,
               beta: filteredRotation.y,
               gamma: filteredRotation.z
             },
-            timestamp: Date.now(),
+            timestamp: currentTime,
           });
           
           // Use launch detector for intelligent start detection
@@ -239,9 +297,9 @@ export const useEnhancedSensorFusion = ({
                 x: filteredAcceleration.x,
                 y: filteredAcceleration.y,
                 z: filteredAcceleration.z,
-                timestamp: Date.now()
+                timestamp: currentTime
               },
-              fusedSpeed
+              fusedSpeedRef.current * 3.6 // Current fused speed in km/h
             );
 
             if (launchDetected && onAccelerationDetected) {
@@ -294,6 +352,13 @@ export const useEnhancedSensorFusion = ({
     IMUFilters.accelerationLowPass.reset();
     IMUFilters.accelerationHighPass.reset();
     IMUFilters.gyroscopeLowPass.reset();
+    
+    // Reset Grok's sensor fusion state
+    prevTimestampRef.current = 0;
+    imuVelocityRef.current = 0;
+    fusedSpeedRef.current = 0;
+    lastGpsSpeedRef.current = 0;
+    
     console.log('🔄 Enhanced sensor fusion and filters reset');
   }, [stopTracking]);
 
