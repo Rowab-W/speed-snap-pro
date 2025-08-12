@@ -288,13 +288,51 @@ const SpeedSnap: React.FC = () => {
     });
   }, [distance, elapsedTime, isRunning]);
 
-  // Dragy-style measurement start with placement guide
-  const startMeasurement = useCallback(() => {
+  // Dragy-style measurement start without placement guide
+  const startMeasurement = useCallback(async () => {
     if (isRunning || waitingForAcceleration) return;
     
     console.log('🚀 START button pressed - Dragy mode activated');
-    setShowPlacementGuide(true);
-  }, [isRunning, waitingForAcceleration]);
+    
+    // Start measurement directly without placement guide
+    await initializeSensors();
+    initializeKalmanFilter();
+    
+    // Start high-frequency GPS tracking immediately
+    startGPSTracking();
+    
+    // Set Dragy-style states
+    setStartTriggered(true);
+    setWaitingForAcceleration(true);
+    waitingForAccelerationRef.current = true;
+    setSpeed(0);
+    setElapsedTime(0);
+    setDistance(0);
+    setDataPoints([]);
+    setTimes({
+      '0-20': null,
+      '0-30': null,
+      '0-40': null,
+      '0-60': null,
+      '0-80': null,
+      '0-100': null,
+      '0-120': null,
+      '0-130': null,
+      '0-200': null,
+      '0-250': null,
+      quarterMile: null,
+      halfMile: null,
+    });
+    setHasResults(false);
+    setGpsStatus('Dragy mode ready - waiting for acceleration...');
+    
+    console.log('✅ Dragy mode ready - waiting for acceleration trigger');
+    
+    toast({
+      title: "Ready to Launch!",
+      description: "Accelerate smoothly to start measurement",
+    });
+  }, [isRunning, waitingForAcceleration, initializeSensors, initializeKalmanFilter, startGPSTracking]);
 
   const handlePlacementGuideClose = useCallback(async () => {
     setShowPlacementGuide(false);
