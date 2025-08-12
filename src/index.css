@@ -18,10 +18,10 @@
     --popover: 0 0% 100%;
     --popover-foreground: 220 15% 15%;
 
-    /* Primary - Dragy Orange */
-    --primary: 25 95% 55%;
+    /* Primary - Dark Green */
+    --primary: 140 70% 25%;
     --primary-foreground: 0 0% 100%;
-    --primary-glow: 25 95% 65%;
+    --primary-glow: 140 60% 35%;
 
     /* Secondary - Light Gray */
     --secondary: 220 15% 95%;
@@ -42,15 +42,15 @@
     /* Border and input */
     --border: 220 15% 85%;
     --input: 0 0% 100%;
-    --ring: 25 95% 55%;
+    --ring: 140 70% 25%;
 
     /* Success - Racing Green */
     --success: 120 60% 50%;
     --success-foreground: 0 0% 98%;
 
     /* Warning - Racing Yellow */
-    --warning: 45 100% 60%;
-    --warning-foreground: 220 15% 8%;
+    --warning: 45 100% 50%;
+    --warning-foreground: 222.2 84% 4.9%;
 
     /* Gradients */
     --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary-glow)));
@@ -95,8 +95,8 @@
     --popover: 222.2 84% 4.9%;
     --popover-foreground: 210 40% 98%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 140 65% 30%;
+    --primary-foreground: 0 0% 100%;
 
     --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 210 40% 98%;
@@ -109,10 +109,12 @@
 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
+    --warning: 45 100% 60%;
+    --warning-foreground: 0 0% 100%;
 
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --ring: 140 65% 30%;
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 224.3 76.3% 48%;
@@ -170,6 +172,53 @@
     }
     50% {
       box-shadow: 0 0 40px hsl(var(--primary) / 0.6);
+    }
+  }
+
+  /* Pop animation for target hits */
+  .target-pop {
+    animation: target-pop 1s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  }
+
+  @keyframes target-pop {
+    0% {
+      transform: scale(1);
+    }
+    30% {
+      transform: scale(1.2);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+
+  /* Target hit highlighting effect */
+  .target-hit-highlight {
+    animation: target-highlight 5s ease-out;
+  }
+
+  @keyframes target-highlight {
+    0% {
+      background-color: hsl(var(--success) / 0.3);
+      border: 3px solid hsl(var(--success));
+      box-shadow: 
+        0 0 30px hsl(var(--success) / 0.8),
+        0 0 60px hsl(var(--success) / 0.4),
+        inset 0 0 20px hsl(var(--success) / 0.2);
+      transform: scale(1.1);
+    }
+    50% {
+      background-color: hsl(var(--success) / 0.2);
+      box-shadow: 
+        0 0 40px hsl(var(--success) / 0.6),
+        0 0 80px hsl(var(--success) / 0.3);
+      transform: scale(1.05);
+    }
+    100% {
+      background-color: transparent;
+      border: 3px solid transparent;
+      box-shadow: none;
+      transform: scale(1);
     }
   }
 

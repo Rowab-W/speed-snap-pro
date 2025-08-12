@@ -1,19 +1,31 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Play, Square, RotateCcw, Download, Zap, Gauge } from 'lucide-react';
+import { Card } from '@/components/ui/card';
+import { Play, Square, RotateCcw, Download, Zap, TestTube } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { useUnits } from '@/contexts/UnitsContext';
 import SpeedChart from './SpeedChart';
 import { CubicSpline } from '../utils/CubicSpline';
-import { ExtendedKalmanFilter } from '../utils/ExtendedKalmanFilter';
-import { Motion } from '@capacitor/motion';
+import { MultiPassInterpolator } from '../utils/DataProcessing';
+import { useEnhancedSensorFusion } from '../hooks/useEnhancedSensorFusion';
+import { MeasurementDisplay } from './MeasurementDisplay';
+import { ResultsPanel } from './ResultsPanel';
+import { PlacementGuide } from './PlacementGuide';
+import { supabase } from '@/integrations/supabase/client';
+import { soundNotifier } from '../utils/sounds';
 
 interface TimingResults {
+  '0-20': number | null;
+  '0-30': number | null;
+  '0-40': number | null;
+  '0-60': number | null;
+  '0-80': number | null;
   '0-100': number | null;
+  '0-120': number | null;
+  '0-130': number | null;
   '0-200': number | null;
   '0-250': number | null;
-  '0-300': number | null;
   quarterMile: number | null;
   halfMile: number | null;
 }
@@ -24,470 +36,501 @@ interface DataPoint {
 }
 
 const SpeedSnap: React.FC = () => {
+  const { getTargets, getSpeedUnit } = useUnits();
+  const targets = getTargets();
   const [isRunning, setIsRunning] = useState(false);
+  const [startTriggered, setStartTriggered] = useState(false);
+  const [isMeasuring, setIsMeasuring] = useState(false);
   const [waitingForAcceleration, setWaitingForAcceleration] = useState(false);
   const [speed, setSpeed] = useState(0);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [distance, setDistance] = useState(0);
-  const [status, setStatus] = useState('Requesting permissions...');
+  const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
   const [times, setTimes] = useState<TimingResults>({
+    '0-20': null,
+    '0-30': null,
+    '0-40': null,
+    '0-60': null,
+    '0-80': null,
     '0-100': null,
+    '0-120': null,
+    '0-130': null,
     '0-200': null,
     '0-250': null,
-    '0-300': null,
     quarterMile: null,
     halfMile: null,
   });
   const [dataPoints, setDataPoints] = useState<DataPoint[]>([]);
   const [hasResults, setHasResults] = useState(false);
+  const [targetHit, setTargetHit] = useState(false);
+  const [hitTargetLabel, setHitTargetLabel] = useState<string | null>(null);
+  const [showPlacementGuide, setShowPlacementGuide] = useState(false);
 
   const startTimeRef = useRef<number | null>(null);
-  const watchIdRef = useRef<number | null>(null);
-  const lastTimestampRef = useRef<number | null>(null);
-  const ekfRef = useRef<ExtendedKalmanFilter | null>(null);
-  const accelerometerRef = useRef<{ x: number; y: number; z: number }>({ x: 0, y: 0, z: 0 });
+  const animationFrameRef = useRef<number | null>(null);
   const chartRef = useRef<any>(null);
-  const waitingForAccelerationRef = useRef<boolean>(false);
+  const multiPassInterpolator = useRef(new MultiPassInterpolator());
 
-  // Initialize sensors and permissions
+  // High-frequency timer for elapsed time display
+  const updateTimer = useCallback(() => {
+    if (startTimeRef.current && isMeasuring) {
+      const elapsed = (performance.now() - startTimeRef.current) / 1000;
+      setElapsedTime(elapsed);
+    }
+    
+    if (isMeasuring) {
+      animationFrameRef.current = requestAnimationFrame(updateTimer);
+    }
+  }, [isMeasuring]);
+
+  // Start high-frequency timer when measurement begins
   useEffect(() => {
-    const initializeSensors = async () => {
-      try {
-        // Request geolocation permission
-        await new Promise<void>((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(
-            () => {
-              setStatus('GPS permission granted');
-              resolve();
-            },
-            (error) => {
-              setStatus(`GPS error: ${error.message}`);
-              reject(error);
-            },
-            { enableHighAccuracy: true }
-          );
-        });
-
-        // Initialize Capacitor Motion sensors for better mobile support
-        try {
-          const motionListener = await Motion.addListener('accel', (event) => {
-            accelerometerRef.current = {
-              x: event.acceleration.x,
-              y: event.acceleration.y,
-              z: event.acceleration.z,
-            };
-            
-            // Only check acceleration if we're waiting for it after pressing START
-            if (waitingForAccelerationRef.current) {
-              const { x, y, z } = accelerometerRef.current;
-              const magnitude = Math.sqrt(x * x + y * y + z * z);
-              
-              if (magnitude > 2) {
-                // Trigger actual measurement start
-                waitingForAccelerationRef.current = false;
-                setWaitingForAcceleration(false);
-                setIsRunning(true);
-                setStatus('Measuring...');
-                
-                startTimeRef.current = performance.now();
-                lastTimestampRef.current = null;
-                ekfRef.current = new ExtendedKalmanFilter();
-
-                // Clear existing GPS watch and start measurement tracking
-                if (watchIdRef.current) {
-                  navigator.geolocation.clearWatch(watchIdRef.current);
-                }
-
-                if (navigator.geolocation) {
-                  watchIdRef.current = navigator.geolocation.watchPosition(
-                    handlePosition,
-                    (error) => {
-                      setStatus(`GPS error: ${error.message}`);
-                      setIsRunning(false);
-                      setWaitingForAcceleration(false);
-                      waitingForAccelerationRef.current = false;
-                    },
-                    {
-                      enableHighAccuracy: true,
-                      maximumAge: 0,
-                      timeout: 5000,
-                    }
-                  );
-                }
-
-                toast({
-                  title: "Measurement Started!",
-                  description: "Tracking your acceleration now",
-                });
-              }
-            }
-          });
-          
-          setStatus(prev => prev + ' ✅ Capacitor Motion sensors active.');
-          
-          return () => {
-            motionListener.remove();
-          };
-        } catch (error) {
-          // Fallback to browser motion events if Capacitor is not available
-          if ('DeviceMotionEvent' in window) {
-            const handleDeviceMotion = (event: DeviceMotionEvent) => {
-              if (event.acceleration) {
-                accelerometerRef.current = {
-                  x: event.acceleration.x || 0,
-                  y: event.acceleration.y || 0,
-                  z: event.acceleration.z || 0,
-                };
-                
-                // Only check acceleration if we're waiting for it after pressing START
-                if (waitingForAccelerationRef.current) {
-                  const { x, y, z } = accelerometerRef.current;
-                  const magnitude = Math.sqrt(x * x + y * y + z * z);
-                  
-                  if (magnitude > 2) {
-                    // Trigger actual measurement start
-                    waitingForAccelerationRef.current = false;
-                    setWaitingForAcceleration(false);
-                    setIsRunning(true);
-                    setStatus('Measuring...');
-                    
-                    startTimeRef.current = performance.now();
-                    lastTimestampRef.current = null;
-                    ekfRef.current = new ExtendedKalmanFilter();
-
-                    // Clear existing GPS watch and start measurement tracking
-                    if (watchIdRef.current) {
-                      navigator.geolocation.clearWatch(watchIdRef.current);
-                    }
-
-                    if (navigator.geolocation) {
-                      watchIdRef.current = navigator.geolocation.watchPosition(
-                        handlePosition,
-                        (error) => {
-                          setStatus(`GPS error: ${error.message}`);
-                          setIsRunning(false);
-                          setWaitingForAcceleration(false);
-                          waitingForAccelerationRef.current = false;
-                        },
-                        {
-                          enableHighAccuracy: true,
-                          maximumAge: 0,
-                          timeout: 5000,
-                        }
-                      );
-                    }
-
-                    toast({
-                      title: "Measurement Started!",
-                      description: "Tracking your acceleration now",
-                    });
-                  }
-                }
-              }
-            };
-
-            window.addEventListener('devicemotion', handleDeviceMotion);
-            setStatus(prev => prev + ' Browser motion sensors active.');
-            
-            return () => {
-              window.removeEventListener('devicemotion', handleDeviceMotion);
-            };
-          } else {
-            setStatus(prev => prev + ' Motion sensors not supported. Using GPS only.');
-          }
-        }
-      } catch (error) {
-        setStatus('Error accessing sensors. Please allow location access.');
-        toast({
-          title: "Sensor Error",
-          description: "Please allow location access to use SpeedSnap",
-          variant: "destructive",
-        });
+    if (isMeasuring && !animationFrameRef.current) {
+      animationFrameRef.current = requestAnimationFrame(updateTimer);
+    } else if (!isMeasuring && animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
       }
     };
+  }, [isMeasuring, updateTimer]);
 
-    initializeSensors();
-    ekfRef.current = new ExtendedKalmanFilter();
-  }, []); // Remove dependency to prevent re-initialization
-
-  // Check for acceleration to trigger actual measurement
-  const checkAcceleration = useCallback(() => {
-    const { x, y, z } = accelerometerRef.current;
-    const magnitude = Math.sqrt(x * x + y * y + z * z);
-    
-    // Only start measurement if we're waiting for acceleration and conditions are met
-    if (magnitude > 2 && waitingForAcceleration && speed < 5) {
-      startActualMeasurement();
+  // Handle acceleration detection callback (Grok's logic implementation)
+  const handleAccelerationDetected = useCallback(() => {
+    if (startTriggered) {
+      console.log('🚀 Acceleration > 0.3 m/s² detected AND START was pressed! Starting measurement...');
+      setIsMeasuring(true);
+      setWaitingForAcceleration(false);
+      setIsRunning(true);
+      
+      startTimeRef.current = performance.now(); // Start timer immediately when acceleration detected
+      console.log('🕐 Start time set:', startTimeRef.current);
+      
+      initializeKalmanFilter();
+      resetTracking();
+      
+      startTracking();
+      
+      console.log('📍 GPS tracking started with high accuracy');
+    } else {
+      console.log('🚫 Acceleration detected but START button not pressed - ignoring');
     }
-  }, [waitingForAcceleration, speed]);
+  }, [startTriggered]);
 
-  // Prepare for measurement (called when START button is pressed)
-  const startMeasurement = useCallback(() => {
+  // Handle data point additions
+  const handleDataPointAdded = useCallback((dataPoint: DataPoint) => {
+    console.log('📊 Data point added:', dataPoint);
+    setDataPoints(prev => [...prev, dataPoint]);
+  }, []);
+
+  console.log('🔍 Initializing enhanced sensor fusion...');
+  
+  // Initialize enhanced sensor fusion hook with Grok's improvements
+  const {
+    sensorData,
+    fusedSpeed,
+    gpsStatus,
+    requestGPSPermission,
+    initializeSensors,
+    initializeKalmanFilter,
+    startTracking,
+    stopTracking,
+    resetTracking,
+    updateKalmanFilter,
+    getAccelerometerData
+  } = useEnhancedSensorFusion({
+    onAccelerationDetected: handleAccelerationDetected,
+    waitingForAcceleration,
+    accelerationThreshold: 0.3,
+    isRunning,
+    onSpeedUpdate: (newSpeed: number) => {
+      console.log('🏃 Enhanced speed update:', newSpeed.toFixed(2), 'km/h');
+      setSpeed(newSpeed);
+      
+      // Auto-trigger measurement if waiting for acceleration
+      if (waitingForAcceleration && newSpeed > 1 && startTriggered) {
+        console.log('🚀 Speed detected while waiting - auto-starting measurement');
+        handleAccelerationDetected();
+      }
+    },
+    onDataPointAdded: handleDataPointAdded
+  });
+  
+  console.log('✅ DEBUG: Enhanced sensor fusion hook initialized successfully');
+
+  // Manual start measurement with intelligent launch detection
+  const startMeasurement = useCallback(async () => {
     if (isRunning || waitingForAcceleration) return;
-
-    setWaitingForAcceleration(true);
-    waitingForAccelerationRef.current = true; // Update ref as well
+    
+    console.log('🚀 START button pressed - Intelligent launch detection mode');
+    
+    // Initialize sensors and tracking systems
+    await initializeSensors();
+    initializeKalmanFilter();
+    startTracking();
+    
+    // Set ready state - waiting for intelligent launch detection
+    setStartTriggered(true);
+    setWaitingForAcceleration(true); // Wait for launch detection
+    setIsMeasuring(false); // Not measuring until launch detected
+    setIsRunning(false); // Not running until launch detected
     setSpeed(0);
     setElapsedTime(0);
     setDistance(0);
     setDataPoints([]);
     setTimes({
+      '0-20': null,
+      '0-30': null,
+      '0-40': null,
+      '0-60': null,
+      '0-80': null,
       '0-100': null,
+      '0-120': null,
+      '0-130': null,
       '0-200': null,
       '0-250': null,
-      '0-300': null,
       quarterMile: null,
       halfMile: null,
     });
     setHasResults(false);
-    setStatus('Waiting for acceleration... (>2 m/s²)');
-
-    // Start GPS tracking to monitor speed
-    if (navigator.geolocation) {
-      watchIdRef.current = navigator.geolocation.watchPosition(
-        (position) => {
-          const speedMs = position.coords.speed || 0;
-          const speedKmh = speedMs * 3.6;
-          setSpeed(speedKmh);
-        },
-        (error) => {
-          setStatus(`GPS error: ${error.message}`);
-          setWaitingForAcceleration(false);
-          toast({
-            title: "GPS Error",
-            description: error.message,
-            variant: "destructive",
-          });
-        },
-        {
-          enableHighAccuracy: true,
-          maximumAge: 0,
-          timeout: 5000,
-        }
-      );
-    }
-
-    toast({
-      title: "Ready to Start",
-      description: "Accelerate to begin measurement (>2 m/s² from <5 km/h)",
-    });
-  }, [isRunning, waitingForAcceleration]);
-
-  // Start actual measurement (called when acceleration is detected)
-  const startActualMeasurement = useCallback(() => {
-    setWaitingForAcceleration(false);
-    setIsRunning(true);
-    setStatus('Measuring...');
     
-    startTimeRef.current = performance.now();
-    lastTimestampRef.current = null;
-    ekfRef.current = new ExtendedKalmanFilter();
-
-    // Continue with existing GPS tracking but now for measurement
-    if (watchIdRef.current) {
-      navigator.geolocation.clearWatch(watchIdRef.current);
-    }
-
-    if (navigator.geolocation) {
-      watchIdRef.current = navigator.geolocation.watchPosition(
-        handlePosition,
-        (error) => {
-          setStatus(`GPS error: ${error.message}`);
-          stopMeasurement();
-          toast({
-            title: "GPS Error",
-            description: error.message,
-            variant: "destructive",
-          });
-        },
-        {
-          enableHighAccuracy: true,
-          maximumAge: 0,
-          timeout: 5000,
-        }
-      );
-    }
-
+    console.log('✅ Ready for launch detection - accelerate to start measurement');
+    
     toast({
-      title: "Measurement Started!",
-      description: "Tracking your acceleration now",
+      title: "Ready for Launch!",
+      description: "Accelerate smoothly to start timing",
     });
+  }, [isRunning, waitingForAcceleration, initializeSensors, initializeKalmanFilter, startTracking]);
+
+  // Initialize sensors and permissions only
+  useEffect(() => {
+    const initializeApp = async () => {
+      // Request GPS permission first
+      console.log('🔐 Requesting GPS permission...');
+      await requestGPSPermission();
+
+      // Initialize sensor fusion
+      const cleanup = await initializeSensors();
+      
+      return cleanup;
+    };
+
+    initializeApp();
+    initializeKalmanFilter();
   }, []);
 
-  // Handle GPS position updates
-  const handlePosition = useCallback((position: GeolocationPosition) => {
-    if (!isRunning || !startTimeRef.current || !ekfRef.current) return;
+  // Check timing milestones in real-time
+  useEffect(() => {
+    if (!isRunning) return;
 
-    console.log('GPS Position:', {
-      speed: position.coords.speed,
-      accuracy: position.coords.accuracy,
-      timestamp: position.timestamp
-    });
-
-    const speedMs = position.coords.speed || 0;
-    const speedKmh = speedMs * 3.6;
-    const timestamp = position.timestamp;
-    const elapsed = (performance.now() - startTimeRef.current) / 1000;
-
-    // Calculate distance
-    if (lastTimestampRef.current) {
-      const dt = (timestamp - lastTimestampRef.current) / 1000;
-      setDistance(prev => prev + (speedMs * dt));
-    }
-    lastTimestampRef.current = timestamp;
-
-    // Apply Kalman filter
-    const { x, y, z } = accelerometerRef.current;
-    const accelMagnitude = Math.sqrt(x * x + y * y + z * z);
-    const dt = lastTimestampRef.current ? (timestamp - lastTimestampRef.current) / 1000 : 0.1;
-    
-    ekfRef.current.predict(dt);
-    const fusedSpeed = ekfRef.current.update([speedKmh, accelMagnitude]);
-
-    console.log('Speed data:', {
-      rawSpeedKmh: speedKmh,
-      fusedSpeed: fusedSpeed,
-      accelMagnitude: accelMagnitude
-    });
-
-    setSpeed(fusedSpeed);
-    setElapsedTime(elapsed);
-    
-    // Store data point
-    setDataPoints(prev => [...prev, { time: elapsed, speed: fusedSpeed }]);
-
-    // Check timing milestones
     setTimes(prev => {
       const newTimes = { ...prev };
-      if (fusedSpeed >= 100 && !prev['0-100']) {
-        newTimes['0-100'] = elapsed;
+      const elapsed = elapsedTime;
+
+      // Use dynamic targets based on units
+      targets.speeds.forEach((target, index) => {
+        const key = targets.labels[index] as keyof TimingResults;
+        console.log(`Checking target ${key}: speed=${speed.toFixed(1)}, target=${target}, current=${prev[key]}`);
+        
+        if (speed >= target && !prev[key]) {
+          console.log(`🎯 Target ${key} hit! Time: ${elapsed.toFixed(2)}s`);
+          newTimes[key] = elapsed;
+          setTargetHit(true);
+          setHitTargetLabel(key);
+          
+          // Play sound notification
+          soundNotifier.playTargetHit();
+          
+          // Reset highlighting after 5 seconds
+          setTimeout(() => {
+            setTargetHit(false);
+            setHitTargetLabel(null);
+          }, 5000);
+          
+          toast({
+            title: `${target} ${getSpeedUnit()} Reached!`,
+            description: `Time: ${elapsed.toFixed(2)}s`,
+          });
+        }
+      });
+      return newTimes;
+    });
+  }, [speed, elapsedTime, isRunning]);
+
+  // Check distance milestones
+  useEffect(() => {
+    if (!isRunning) return;
+
+    setTimes(prev => {
+      const newTimes = { ...prev };
+      const elapsed = elapsedTime;
+
+      if (distance >= 402.336 && !prev.quarterMile) {
+        newTimes.quarterMile = elapsed;
+        setTargetHit(true);
+        setHitTargetLabel('quarterMile');
+        soundNotifier.playMilestone();
+        setTimeout(() => {
+          setTargetHit(false);
+          setHitTargetLabel(null);
+        }, 5000);
         toast({
-          title: "100 km/h Reached!",
+          title: "Quarter Mile Complete!",
           description: `Time: ${elapsed.toFixed(2)}s`,
         });
       }
-      if (fusedSpeed >= 200 && !prev['0-200']) {
-        newTimes['0-200'] = elapsed;
+      if (distance >= 804.672 && !prev.halfMile) {
+        newTimes.halfMile = elapsed;
+        setTargetHit(true);
+        setHitTargetLabel('halfMile');
+        soundNotifier.playMilestone();
+        setTimeout(() => {
+          setTargetHit(false);
+          setHitTargetLabel(null);
+        }, 5000);
+        stopMeasurement();
         toast({
-          title: "200 km/h Reached!",
+          title: "Half Mile Complete!",
           description: `Time: ${elapsed.toFixed(2)}s`,
         });
-      }
-      if (fusedSpeed >= 250 && !prev['0-250']) {
-        newTimes['0-250'] = elapsed;
-      }
-      if (fusedSpeed >= 300 && !prev['0-300']) {
-        newTimes['0-300'] = elapsed;
       }
       return newTimes;
     });
+  }, [distance, elapsedTime, isRunning]);
 
-    // Check distance milestones
-    setDistance(currentDistance => {
-      setTimes(prev => {
-        const newTimes = { ...prev };
-        if (currentDistance >= 402.336 && !prev.quarterMile) {
-          newTimes.quarterMile = elapsed;
-          toast({
-            title: "Quarter Mile Complete!",
-            description: `Time: ${elapsed.toFixed(2)}s`,
-          });
-        }
-        if (currentDistance >= 804.672 && !prev.halfMile) {
-          newTimes.halfMile = elapsed;
-          stopMeasurement();
-          toast({
-            title: "Half Mile Complete!",
-            description: `Time: ${elapsed.toFixed(2)}s`,
-          });
-        }
-        return newTimes;
-      });
-      return currentDistance;
+
+  const handlePlacementGuideClose = useCallback(async () => {
+    setShowPlacementGuide(false);
+
+    // Initialize sensors and Kalman filter
+    await initializeSensors();
+    initializeKalmanFilter();
+    
+    // Start high-frequency GPS tracking immediately
+    startTracking();
+    
+    // Set Dragy-style states
+    setStartTriggered(true);
+    setWaitingForAcceleration(true);
+    setSpeed(0);
+    setElapsedTime(0);
+    setDistance(0);
+    setDataPoints([]);
+    setTimes({
+      '0-20': null,
+      '0-30': null,
+      '0-40': null,
+      '0-60': null,
+      '0-80': null,
+      '0-100': null,
+      '0-120': null,
+      '0-130': null,
+      '0-200': null,
+      '0-250': null,
+      quarterMile: null,
+      halfMile: null,
     });
-  }, [isRunning]);
+    setHasResults(false);
+    // GPS status managed by enhanced sensor fusion
+    
+    console.log('✅ Dragy mode ready - waiting for acceleration trigger');
+    
+    toast({
+      title: "Ready to Launch!",
+      description: "Accelerate smoothly to start measurement",
+    });
+  }, [requestGPSPermission, initializeSensors, initializeKalmanFilter, startTracking]);
 
-  // Stop measurement
+  // Stop measurement (Grok's logic implementation)
   const stopMeasurement = useCallback(() => {
     if (!isRunning && !waitingForAcceleration) return;
 
+    // Grok's logic: Set isMeasuring = false, startTriggered = false, speed = 0
+    setIsMeasuring(false);
+    setStartTriggered(false);
     setIsRunning(false);
     setWaitingForAcceleration(false);
-    setStatus('Processing results...');
+    setSpeed(0); // Set speed display = "0 km/h"
+    // GPS status managed by enhanced sensor fusion
+    startTimeRef.current = null; // Reset timer
 
-    if (watchIdRef.current) {
-      navigator.geolocation.clearWatch(watchIdRef.current);
-      watchIdRef.current = null;
-    }
+    stopTracking();
 
-    // Process results with interpolation
+    // Advanced post-processing with multi-pass interpolation
     if (dataPoints.length >= 4) {
       try {
-        const times = dataPoints.map(p => p.time);
-        const speeds = dataPoints.map(p => p.speed);
-        const spline = new CubicSpline(times, speeds);
-
+        console.log('Starting advanced post-processing with', dataPoints.length, 'data points');
+        
         setTimes(prev => {
           const newTimes = { ...prev };
           
-          // Interpolate missing times
-          if (!prev['0-100'] && speeds.some(s => s >= 100)) {
-            newTimes['0-100'] = spline.findTime(100);
+          // Use multi-pass interpolation for missing times
+          if (!prev['0-30'] && dataPoints.some(p => p.speed >= 30)) {
+            const time30 = multiPassInterpolator.current.findTimeForSpeed(dataPoints, 30);
+            if (time30 !== null) {
+              newTimes['0-30'] = time30;
+              console.log('Multi-pass interpolation found 0-30 time:', time30);
+            }
           }
-          if (!prev['0-200'] && speeds.some(s => s >= 200)) {
-            newTimes['0-200'] = spline.findTime(200);
+          
+          if (!prev['0-60'] && dataPoints.some(p => p.speed >= 60)) {
+            const time60 = multiPassInterpolator.current.findTimeForSpeed(dataPoints, 60);
+            if (time60 !== null) {
+              newTimes['0-60'] = time60;
+              console.log('Multi-pass interpolation found 0-60 time:', time60);
+            }
           }
-          if (!prev['0-250'] && speeds.some(s => s >= 250)) {
-            newTimes['0-250'] = spline.findTime(250);
+          
+          if (!prev['0-100'] && dataPoints.some(p => p.speed >= 100)) {
+            const time100 = multiPassInterpolator.current.findTimeForSpeed(dataPoints, 100);
+            if (time100 !== null) {
+              newTimes['0-100'] = time100;
+              console.log('Multi-pass interpolation found 0-100 time:', time100);
+            }
           }
-          if (!prev['0-300'] && speeds.some(s => s >= 300)) {
-            newTimes['0-300'] = spline.findTime(300);
+          
+          if (!prev['0-200'] && dataPoints.some(p => p.speed >= 200)) {
+            const time200 = multiPassInterpolator.current.findTimeForSpeed(dataPoints, 200);
+            if (time200 !== null) {
+              newTimes['0-200'] = time200;
+              console.log('Multi-pass interpolation found 0-200 time:', time200);
+            }
+          }
+          
+          if (!prev['0-250'] && dataPoints.some(p => p.speed >= 250)) {
+            const time250 = multiPassInterpolator.current.findTimeForSpeed(dataPoints, 250);
+            if (time250 !== null) {
+              newTimes['0-250'] = time250;
+            }
           }
           
           return newTimes;
         });
       } catch (error) {
-        console.error('Interpolation error:', error);
+        console.error('Advanced interpolation error:', error);
+        
+        // Fallback to original cubic spline method
+        try {
+          const times = dataPoints.map(p => p.time);
+          const speeds = dataPoints.map(p => p.speed);
+          const spline = new CubicSpline(times, speeds);
+
+          setTimes(prev => {
+            const newTimes = { ...prev };
+            
+            if (!prev['0-30'] && speeds.some(s => s >= 30)) {
+              newTimes['0-30'] = spline.findTime(30);
+            }
+            if (!prev['0-60'] && speeds.some(s => s >= 60)) {
+              newTimes['0-60'] = spline.findTime(60);
+            }
+            if (!prev['0-100'] && speeds.some(s => s >= 100)) {
+              newTimes['0-100'] = spline.findTime(100);
+            }
+            if (!prev['0-200'] && speeds.some(s => s >= 200)) {
+              newTimes['0-200'] = spline.findTime(200);
+            }
+            if (!prev['0-250'] && speeds.some(s => s >= 250)) {
+              newTimes['0-250'] = spline.findTime(250);
+            }
+            
+            return newTimes;
+          });
+        } catch (fallbackError) {
+          console.error('Fallback interpolation also failed:', fallbackError);
+        }
       }
     }
 
-    setStatus('Measurement complete');
+    // Save performance record to database
+    savePerformanceRecord();
+    
+    // GPS status managed by enhanced sensor fusion
     setHasResults(true);
     
     toast({
       title: "Measurement Complete",
       description: "Check your results below!",
     });
-  }, [isRunning, waitingForAcceleration, dataPoints]);
+  }, [isRunning, waitingForAcceleration, dataPoints, stopTracking]);
 
-  // Reset all data
+  // Save performance record to database
+  const savePerformanceRecord = async () => {
+    try {
+      const maxSpeed = Math.max(...dataPoints.map(p => p.speed), speed);
+      const maxAcceleration = Math.max(...dataPoints.map((p, i) => {
+        if (i === 0) return 0;
+        const speedDiff = p.speed - dataPoints[i - 1].speed;
+        const timeDiff = (p.time - dataPoints[i - 1].time) || 0.1;
+        return (speedDiff / 3.6) / timeDiff; // Convert km/h to m/s²
+      }));
+      
+      const measurementDuration = elapsedTime * 1000; // Convert to milliseconds
+      
+      // Generate a user ID for testing (in production, this would come from auth)
+      const userId = '00000000-0000-0000-0000-000000000000';
+      
+      const { error } = await supabase
+        .from('performance_records')
+        .insert({
+          user_id: userId,
+          max_speed: maxSpeed,
+          max_acceleration: maxAcceleration,
+          measurement_duration: measurementDuration,
+        });
+
+      if (error) {
+        console.error('Error saving performance record:', error);
+      } else {
+        console.log('Performance record saved successfully');
+      }
+    } catch (error) {
+      console.error('Failed to save performance record:', error);
+    }
+  };
+
+  // Reset all data (including Grok's state variables)
   const resetMeasurement = useCallback(() => {
     if (isRunning || waitingForAcceleration) {
       stopMeasurement();
     }
     
+    // Reset Grok's state variables
+    setStartTriggered(false);
+    setIsMeasuring(false);
     setSpeed(0);
     setElapsedTime(0);
     setDistance(0);
     setDataPoints([]);
     setWaitingForAcceleration(false);
-    waitingForAccelerationRef.current = false; // Reset ref as well
     setTimes({
+      '0-20': null,
+      '0-30': null,
+      '0-40': null,
+      '0-60': null,
+      '0-80': null,
       '0-100': null,
+      '0-120': null,
+      '0-130': null,
       '0-200': null,
       '0-250': null,
-      '0-300': null,
       quarterMile: null,
       halfMile: null,
     });
     setHasResults(false);
-    setStatus('Ready to measure');
+    
+    resetTracking();
     
     toast({
       title: "Reset Complete",
       description: "Ready for next measurement",
     });
-  }, [isRunning, waitingForAcceleration, stopMeasurement]);
+  }, [isRunning, waitingForAcceleration, stopMeasurement, resetTracking]);
 
   // Export results
   const exportResults = useCallback(() => {
@@ -497,10 +540,12 @@ const SpeedSnap: React.FC = () => {
     let text = 'SpeedSnap Results\n';
     text += `Date: ${new Date().toLocaleString()}\n\n`;
     
+    if (times['0-30']) text += `0-30 km/h: ${times['0-30'].toFixed(2)} s\n`;
+    if (times['0-60']) text += `0-60 km/h: ${times['0-60'].toFixed(2)} s\n`;
     if (times['0-100']) text += `0-100 km/h: ${times['0-100'].toFixed(2)} s\n`;
     if (times['0-200']) text += `0-200 km/h: ${times['0-200'].toFixed(2)} s\n`;
     if (times['0-250']) text += `0-250 km/h: ${times['0-250'].toFixed(2)} s\n`;
-    if (times['0-300']) text += `0-300 km/h: ${times['0-300'].toFixed(2)} s\n`;
+    
     if (times.quarterMile) text += `Quarter Mile: ${times.quarterMile.toFixed(2)} s\n`;
     if (times.halfMile) text += `Half Mile: ${times.halfMile.toFixed(2)} s\n`;
 
@@ -521,6 +566,164 @@ const SpeedSnap: React.FC = () => {
     });
   }, [hasResults, times]);
 
+  // Simulate complete acceleration test for all measurements
+  const simulateSprint = useCallback(() => {
+    if (isRunning || waitingForAcceleration) return;
+
+    setIsRunning(true);
+    setSpeed(0);
+    setElapsedTime(0);
+    setDistance(0);
+    setDataPoints([]);
+    setTimes({
+      '0-20': null,
+      '0-30': null,
+      '0-40': null,
+      '0-60': null,
+      '0-80': null,
+      '0-100': null,
+      '0-120': null,
+      '0-130': null,
+      '0-200': null,
+      '0-250': null,
+      quarterMile: null,
+      halfMile: null,
+    });
+    setHasResults(false);
+    
+    // Generate realistic acceleration data up to 300km/h and half mile
+    const simulationData: DataPoint[] = [];
+    const totalTime = 25.0; // Extended time to reach all milestones
+    const timeStep = 0.1; // 100ms intervals
+    
+    for (let t = 0; t <= totalTime; t += timeStep) {
+      // Realistic acceleration curve with decreasing acceleration at higher speeds
+      let speed;
+      if (t <= 2.0) {
+        // Initial strong acceleration (0-50 km/h)
+        speed = t * 25;
+      } else if (t <= 6.0) {
+        // 0-100 km/h phase
+        speed = 50 + (t - 2.0) * 12.5;
+      } else if (t <= 12.0) {
+        // 100-200 km/h phase (slower acceleration)
+        speed = 100 + (t - 6.0) * 16.67;
+      } else if (t <= 18.0) {
+        // 200-250 km/h phase (much slower)
+        speed = 200 + (t - 12.0) * 8.33;
+      } else {
+        // 250-300 km/h phase (very slow)
+        speed = 250 + (t - 18.0) * 7.14;
+      }
+      
+      // Add some realistic noise/variance
+      speed += (Math.random() - 0.5) * 3;
+      speed = Math.max(0, Math.min(speed, 300));
+      
+      // Calculate approximate distance (very rough estimation)
+      const avgSpeed = t > 0 ? speed / 2 : 0; // Average speed approximation
+      const distance = (avgSpeed * t * 1000) / 3600; // Convert to meters
+      
+      simulationData.push({ time: t, speed });
+    }
+    
+    // Animate the simulation
+    let currentIndex = 0;
+    startTimeRef.current = performance.now();
+    
+    const animate = () => {
+      if (currentIndex >= simulationData.length) {
+        // Simulation complete
+        setTimeout(() => {
+          stopMeasurement();
+        }, 500);
+        return;
+      }
+      
+      const dataPoint = simulationData[currentIndex];
+      setSpeed(dataPoint.speed);
+      setElapsedTime(dataPoint.time);
+      setDataPoints(prev => [...prev, dataPoint]);
+      
+      // Update distance for simulation (approximate)
+      const avgSpeed = dataPoint.speed / 3.6; // Convert km/h to m/s
+      const distanceIncrement = avgSpeed * 0.1; // Distance in 0.1 seconds
+      setDistance(prev => prev + distanceIncrement);
+      
+      // Check for milestones during simulation
+      const elapsed = dataPoint.time;
+      setTimes(prev => {
+        const newTimes = { ...prev };
+        
+        // Speed milestones
+        if (dataPoint.speed >= 30 && !prev['0-30']) {
+          newTimes['0-30'] = elapsed;
+          toast({
+            title: "30 km/h Reached!",
+            description: `Time: ${elapsed.toFixed(2)}s`,
+          });
+        }
+        if (dataPoint.speed >= 60 && !prev['0-60']) {
+          newTimes['0-60'] = elapsed;
+          toast({
+            title: "60 km/h Reached!",
+            description: `Time: ${elapsed.toFixed(2)}s`,
+          });
+        }
+        if (dataPoint.speed >= 100 && !prev['0-100']) {
+          newTimes['0-100'] = elapsed;
+          toast({
+            title: "100 km/h Reached!",
+            description: `Time: ${elapsed.toFixed(2)}s`,
+          });
+        }
+        if (dataPoint.speed >= 200 && !prev['0-200']) {
+          newTimes['0-200'] = elapsed;
+          toast({
+            title: "200 km/h Reached!",
+            description: `Time: ${elapsed.toFixed(2)}s`,
+          });
+        }
+        if (dataPoint.speed >= 250 && !prev['0-250']) {
+          newTimes['0-250'] = elapsed;
+          toast({
+            title: "250 km/h Reached!",
+            description: `Time: ${elapsed.toFixed(2)}s`,
+          });
+        }
+        
+        // Distance milestones (update distance state and check)
+        const currentDistance = (avgSpeed * elapsed * 1000) / 3600;
+        if (currentDistance >= 402.336 && !prev.quarterMile) {
+          newTimes.quarterMile = elapsed;
+          toast({
+            title: "Quarter Mile Complete!",
+            description: `Time: ${elapsed.toFixed(2)}s`,
+          });
+        }
+        if (currentDistance >= 804.672 && !prev.halfMile) {
+          newTimes.halfMile = elapsed;
+          toast({
+            title: "Half Mile Complete!",
+            description: `Time: ${elapsed.toFixed(2)}s`,
+          });
+        }
+        
+        return newTimes;
+      });
+      
+      currentIndex++;
+      setTimeout(animate, 100); // 100ms between updates
+    };
+    
+    toast({
+      title: "Full Test Simulation Started",
+      description: "Running complete acceleration test (0-300km/h, 1/4 & 1/2 mile)",
+    });
+    
+    animate();
+  }, [isRunning, waitingForAcceleration, times, stopMeasurement]);
+
   return (
     <div className="min-h-screen bg-gradient-background p-4">
       <div className="max-w-md mx-auto space-y-6">
@@ -535,22 +738,30 @@ const SpeedSnap: React.FC = () => {
           <p className="text-muted-foreground">Professional Acceleration Timer</p>
         </div>
 
-        {/* Main Display Card */}
-        <Card className="p-6 text-center space-y-4 racing-glow">
-          <div className="space-y-2">
-            <div className={`text-6xl font-bold speed-gradient ${isRunning ? 'pulse-racing' : ''}`}>
-              {Math.round(speed)} km/h
+        {/* GPS Accuracy Warning */}
+        {gpsAccuracy !== null && gpsAccuracy > 10 && (
+          <Card className="p-4 border-warning bg-warning/10">
+            <div className="flex items-center gap-2 text-warning-foreground">
+              <Zap className="w-4 h-4" />
+              <div className="text-sm">
+                <strong>Poor GPS Signal</strong>
+                <p className="text-xs mt-1">
+                  GPS accuracy: ±{gpsAccuracy.toFixed(1)}m. For our target ±0.1s accuracy, 
+                  move to an open area with clear sky view.
+                </p>
+              </div>
             </div>
-            <div className="text-2xl text-accent font-mono">
-              {elapsedTime.toFixed(2)} s
-            </div>
-          </div>
+          </Card>
+        )}
 
-          <div className="flex items-center justify-center gap-2">
-            <Gauge className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">{status}</span>
-          </div>
-        </Card>
+        {/* Main Display Card */}
+        <MeasurementDisplay 
+          speed={speed}
+          elapsedTime={elapsedTime}
+          status={gpsStatus}
+          isRunning={isRunning}
+          targetHit={targetHit}
+        />
 
         {/* Control Buttons */}
         <div className="flex gap-3">
@@ -558,7 +769,7 @@ const SpeedSnap: React.FC = () => {
             onClick={(isRunning || waitingForAcceleration) ? stopMeasurement : startMeasurement}
             variant={(isRunning || waitingForAcceleration) ? "destructive" : "default"}
             className="flex-1 h-12 text-lg font-semibold"
-            disabled={status.includes('❌') || status.includes('Requesting')}
+            disabled={gpsStatus.includes('❌') || gpsStatus.includes('Requesting')}
           >
             {(isRunning || waitingForAcceleration) ? (
               <>
@@ -594,50 +805,26 @@ const SpeedSnap: React.FC = () => {
           </Button>
         </div>
 
+        {/* Simulation Button */}
+        <div className="flex justify-center">
+          <Button
+            onClick={simulateSprint}
+            variant="secondary"
+            className="w-full h-12 text-lg font-semibold"
+            disabled={isRunning || waitingForAcceleration}
+          >
+            <TestTube className="w-5 h-5 mr-2" />
+            Test All Measurements
+          </Button>
+        </div>
+
         {/* Results */}
-        {hasResults && (
-          <Card className="p-6 space-y-4">
-            <h3 className="text-lg font-semibold text-center">Results</h3>
-            <div className="grid grid-cols-2 gap-3">
-              {times['0-100'] && (
-                <div className="text-center p-3 bg-muted rounded-lg">
-                  <div className="text-sm text-muted-foreground">0-100 km/h</div>
-                  <div className="text-lg font-bold text-primary">{times['0-100'].toFixed(2)}s</div>
-                </div>
-              )}
-              {times['0-200'] && (
-                <div className="text-center p-3 bg-muted rounded-lg">
-                  <div className="text-sm text-muted-foreground">0-200 km/h</div>
-                  <div className="text-lg font-bold text-accent">{times['0-200'].toFixed(2)}s</div>
-                </div>
-              )}
-              {times['0-250'] && (
-                <div className="text-center p-3 bg-muted rounded-lg">
-                  <div className="text-sm text-muted-foreground">0-250 km/h</div>
-                  <div className="text-lg font-bold text-warning">{times['0-250'].toFixed(2)}s</div>
-                </div>
-              )}
-              {times['0-300'] && (
-                <div className="text-center p-3 bg-muted rounded-lg">
-                  <div className="text-sm text-muted-foreground">0-300 km/h</div>
-                  <div className="text-lg font-bold text-success">{times['0-300'].toFixed(2)}s</div>
-                </div>
-              )}
-              {times.quarterMile && (
-                <div className="text-center p-3 bg-muted rounded-lg">
-                  <div className="text-sm text-muted-foreground">1/4 Mile</div>
-                  <div className="text-lg font-bold text-primary">{times.quarterMile.toFixed(2)}s</div>
-                </div>
-              )}
-              {times.halfMile && (
-                <div className="text-center p-3 bg-muted rounded-lg">
-                  <div className="text-sm text-muted-foreground">1/2 Mile</div>
-                  <div className="text-lg font-bold text-accent">{times.halfMile.toFixed(2)}s</div>
-                </div>
-              )}
-            </div>
-          </Card>
-        )}
+        <ResultsPanel 
+          times={times} 
+          hasResults={hasResults} 
+          isRunning={isRunning || waitingForAcceleration}
+          hitTargetLabel={hitTargetLabel}
+        />
 
         {/* Chart */}
         {dataPoints.length > 0 && (
@@ -649,6 +836,11 @@ const SpeedSnap: React.FC = () => {
             />
           </Card>
         )}
+
+        <PlacementGuide 
+          isVisible={showPlacementGuide}
+          onClose={handlePlacementGuideClose}
+        />
       </div>
     </div>
   );

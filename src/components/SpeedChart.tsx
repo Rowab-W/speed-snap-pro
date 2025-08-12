@@ -31,10 +31,16 @@ interface DataPoint {
 }
 
 interface TimingResults {
+  '0-20': number | null;
+  '0-30': number | null;
+  '0-40': number | null;
+  '0-60': number | null;
+  '0-80': number | null;
   '0-100': number | null;
+  '0-120': number | null;
+  '0-130': number | null;
   '0-200': number | null;
   '0-250': number | null;
-  '0-300': number | null;
   quarterMile: number | null;
   halfMile: number | null;
 }
@@ -123,26 +129,78 @@ const SpeedChart = forwardRef<SpeedChartRef, SpeedChartProps>(({ dataPoints, tim
 
   const annotations: any = {};
   
-  // Add vertical lines for timing milestones
+  // Add vertical lines for timing milestones with clear labels at top
+  if (times['0-30']) {
+    annotations['line30'] = {
+      type: 'line',
+      xMin: times['0-30'],
+      xMax: times['0-30'],
+      borderColor: 'hsl(280 100% 70%)',
+      borderWidth: 3,
+      borderDash: [5, 5],
+      label: {
+        content: '0-30 km/h',
+        enabled: true,
+        position: 'end',
+        yAdjust: -10,
+        backgroundColor: 'hsl(280 100% 70%)',
+        color: 'hsl(0 0% 0%)',
+        font: {
+          size: 12,
+          weight: 'bold',
+        },
+        padding: 6,
+        cornerRadius: 4,
+      },
+    };
+  }
+
+  if (times['0-60']) {
+    annotations['line60'] = {
+      type: 'line',
+      xMin: times['0-60'],
+      xMax: times['0-60'],
+      borderColor: 'hsl(320 100% 65%)',
+      borderWidth: 3,
+      borderDash: [5, 5],
+      label: {
+        content: '0-60 km/h',
+        enabled: true,
+        position: 'end',
+        yAdjust: -10,
+        backgroundColor: 'hsl(320 100% 65%)',
+        color: 'hsl(0 0% 0%)',
+        font: {
+          size: 12,
+          weight: 'bold',
+        },
+        padding: 6,
+        cornerRadius: 4,
+      },
+    };
+  }
+
   if (times['0-100']) {
     annotations['line100'] = {
       type: 'line',
       xMin: times['0-100'],
       xMax: times['0-100'],
       borderColor: 'hsl(45 100% 60%)',
-      borderWidth: 2,
+      borderWidth: 3,
       borderDash: [5, 5],
       label: {
-        content: '100 km/h',
+        content: '0-100 km/h',
         enabled: true,
-        position: 'start',
+        position: 'end',
+        yAdjust: -10,
         backgroundColor: 'hsl(45 100% 60%)',
-        color: 'hsl(220 15% 8%)',
+        color: 'hsl(0 0% 0%)',
         font: {
-          size: 10,
+          size: 12,
           weight: 'bold',
         },
-        padding: 4,
+        padding: 6,
+        cornerRadius: 4,
       },
     };
   }
@@ -153,22 +211,96 @@ const SpeedChart = forwardRef<SpeedChartRef, SpeedChartProps>(({ dataPoints, tim
       xMin: times['0-200'],
       xMax: times['0-200'],
       borderColor: 'hsl(120 60% 50%)',
-      borderWidth: 2,
+      borderWidth: 3,
       borderDash: [5, 5],
       label: {
-        content: '200 km/h',
+        content: '0-200 km/h',
         enabled: true,
-        position: 'start',
+        position: 'end',
+        yAdjust: -10,
         backgroundColor: 'hsl(120 60% 50%)',
-        color: 'hsl(0 0% 98%)',
+        color: 'hsl(0 0% 100%)',
         font: {
-          size: 10,
+          size: 12,
           weight: 'bold',
         },
-        padding: 4,
+        padding: 6,
+        cornerRadius: 4,
       },
     };
   }
+
+  if (times['0-250']) {
+    annotations['line250'] = {
+      type: 'line',
+      xMin: times['0-250'],
+      xMax: times['0-250'],
+      borderColor: 'hsl(180 60% 50%)',
+      borderWidth: 3,
+      borderDash: [5, 5],
+      label: {
+        content: '0-250 km/h',
+        enabled: true,
+        position: 'end',
+        yAdjust: -10,
+        backgroundColor: 'hsl(180 60% 50%)',
+        color: 'hsl(0 0% 0%)',
+        font: {
+          size: 12,
+          weight: 'bold',
+        },
+        padding: 6,
+        cornerRadius: 4,
+      },
+    };
+  }
+
+
+  // Add horizontal reference grid lines
+  annotations['speed50'] = {
+    type: 'line',
+    yMin: 50,
+    yMax: 50,
+    borderColor: 'hsl(220 15% 40%)',
+    borderWidth: 1,
+    borderDash: [2, 2],
+  };
+
+  annotations['speed100'] = {
+    type: 'line',
+    yMin: 100,
+    yMax: 100,
+    borderColor: 'hsl(220 15% 40%)',
+    borderWidth: 1,
+    borderDash: [2, 2],
+  };
+
+  annotations['speed150'] = {
+    type: 'line',
+    yMin: 150,
+    yMax: 150,
+    borderColor: 'hsl(220 15% 40%)',
+    borderWidth: 1,
+    borderDash: [2, 2],
+  };
+
+  annotations['speed200'] = {
+    type: 'line',
+    yMin: 200,
+    yMax: 200,
+    borderColor: 'hsl(220 15% 40%)',
+    borderWidth: 1,
+    borderDash: [2, 2],
+  };
+
+  annotations['speed250'] = {
+    type: 'line',
+    yMin: 250,
+    yMax: 250,
+    borderColor: 'hsl(220 15% 40%)',
+    borderWidth: 1,
+    borderDash: [2, 2],
+  };
 
   const options: ChartOptions<'line'> = {
     responsive: true,
@@ -181,19 +313,24 @@ const SpeedChart = forwardRef<SpeedChartRef, SpeedChartProps>(({ dataPoints, tim
       legend: {
         position: 'top',
         labels: {
-          color: 'hsl(0 0% 98%)',
+          color: 'hsl(0 0% 15%)',
           font: {
-            size: 12,
+            size: 14,
+            weight: 'bold',
           },
         },
       },
       title: {
         display: true,
         text: 'Speed vs Time',
-        color: 'hsl(0 0% 98%)',
+        color: 'hsl(0 0% 10%)',
         font: {
-          size: 16,
+          size: 20,
           weight: 'bold',
+        },
+        padding: {
+          top: 10,
+          bottom: 20,
         },
       },
       annotation: {
@@ -219,21 +356,24 @@ const SpeedChart = forwardRef<SpeedChartRef, SpeedChartProps>(({ dataPoints, tim
         title: {
           display: true,
           text: 'Time (seconds)',
-          color: 'hsl(0 0% 98%)',
+          color: 'hsl(0 0% 20%)',
           font: {
-            size: 12,
+            size: 14,
             weight: 'bold',
           },
         },
         ticks: {
-          color: 'hsl(220 10% 65%)',
+          color: 'hsl(0 0% 30%)',
           font: {
-            size: 10,
+            size: 12,
+            weight: 'bold',
           },
+          stepSize: 1,
         },
         grid: {
-          color: 'hsl(220 15% 25%)',
+          color: 'hsl(220 15% 45%)',
           lineWidth: 1,
+          drawTicks: true,
         },
       },
       y: {
@@ -241,21 +381,24 @@ const SpeedChart = forwardRef<SpeedChartRef, SpeedChartProps>(({ dataPoints, tim
         title: {
           display: true,
           text: 'Speed (km/h)',
-          color: 'hsl(0 0% 98%)',
+          color: 'hsl(0 0% 20%)',
           font: {
-            size: 12,
+            size: 14,
             weight: 'bold',
           },
         },
         ticks: {
-          color: 'hsl(220 10% 65%)',
+          color: 'hsl(0 0% 30%)',
           font: {
-            size: 10,
+            size: 12,
+            weight: 'bold',
           },
+          stepSize: 25,
         },
         grid: {
-          color: 'hsl(220 15% 25%)',
+          color: 'hsl(220 15% 45%)',
           lineWidth: 1,
+          drawTicks: true,
         },
         beginAtZero: true,
       },
