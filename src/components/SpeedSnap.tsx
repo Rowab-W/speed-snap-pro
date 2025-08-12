@@ -128,6 +128,8 @@ const SpeedSnap: React.FC = () => {
     setDataPoints(prev => [...prev, dataPoint]);
   }, []);
 
+  console.log('🔍 Initializing enhanced sensor fusion...');
+  
   // Initialize enhanced sensor fusion hook with Grok's improvements
   const {
     sensorData,
@@ -158,6 +160,8 @@ const SpeedSnap: React.FC = () => {
     },
     onDataPointAdded: handleDataPointAdded
   });
+  
+  console.log('✅ DEBUG: Enhanced sensor fusion hook initialized successfully');
 
   // Initialize sensors and permissions
   useEffect(() => {
