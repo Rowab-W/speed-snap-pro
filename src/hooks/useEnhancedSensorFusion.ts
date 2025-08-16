@@ -42,6 +42,7 @@ export const useEnhancedSensorFusion = ({
   const calibrationSamplesRef = useRef<number[]>([]);
   const waitingForAccelerationRef = useRef<boolean>(false);
   const launchDetectorRef = useRef<LaunchDetector | null>(null);
+  const prevPosRef = useRef<GeolocationPosition | null>(null);
   
   // Grok's simplified sensor fusion state
   const prevTimestampRef = useRef<number>(0);
@@ -116,6 +117,38 @@ export const useEnhancedSensorFusion = ({
     }
   }, []);
 
+  // Haversine formula to calculate distance between two GPS coordinates
+  const getDistance = useCallback((pos1: GeolocationPosition, pos2: GeolocationPosition): number => {
+    const R = 6371000; // Earth's radius in meters
+    const lat1 = pos1.coords.latitude * Math.PI / 180;
+    const lat2 = pos2.coords.latitude * Math.PI / 180;
+    const deltaLat = (pos2.coords.latitude - pos1.coords.latitude) * Math.PI / 180;
+    const deltaLng = (pos2.coords.longitude - pos1.coords.longitude) * Math.PI / 180;
+
+    const a = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+              Math.cos(lat1) * Math.cos(lat2) *
+              Math.sin(deltaLng / 2) * Math.sin(deltaLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c; // Distance in meters
+  }, []);
+
+  // Derive speed from consecutive position changes
+  const deriveSpeed = useCallback((currentPos: GeolocationPosition): number => {
+    if (prevPosRef.current) {
+      const dist = getDistance(prevPosRef.current, currentPos);
+      const timeDiff = (currentPos.timestamp - prevPosRef.current.timestamp) / 1000;
+      if (timeDiff > 0) {
+        const speedMs = dist / timeDiff; // m/s
+        const speedKmh = speedMs * 3.6; // Convert to km/h
+        console.log('📐 Derived speed:', { dist: dist.toFixed(2), timeDiff: timeDiff.toFixed(2), speedKmh: speedKmh.toFixed(2) });
+        return speedKmh;
+      }
+    }
+    prevPosRef.current = currentPos;
+    return 0;
+  }, [getDistance]);
+
   // Enhanced GPS tracking with continuous updates
   const initializeGPS = useCallback(() => {
     if (geoWatchRef.current) {
@@ -132,12 +165,12 @@ export const useEnhancedSensorFusion = ({
 
     const handleGpsSuccess = (position: GeolocationPosition) => {
       const gpsSpeedMs = position.coords.speed || 0; // m/s
-      const gpsSpeedKmh = gpsSpeedMs * 3.6; // Convert to km/h
+      let finalSpeedKmh = gpsSpeedMs * 3.6; // Convert to km/h
       const accuracy = position.coords.accuracy || 0;
       
       console.log('GPS Update:', { 
         speedMs: gpsSpeedMs, 
-        speedKmh: gpsSpeedKmh.toFixed(1),
+        speedKmh: finalSpeedKmh.toFixed(1),
         accuracy: accuracy, 
         timestamp: position.timestamp 
       });
@@ -148,7 +181,19 @@ export const useEnhancedSensorFusion = ({
         return;
       }
       
-      lastGpsSpeedRef.current = gpsSpeedMs;
+      // Use derived speed as fallback if GPS speed is unreliable or zero
+      if (gpsSpeedMs === 0 || gpsSpeedMs === null) {
+        const derivedSpeedKmh = deriveSpeed(position);
+        if (derivedSpeedKmh > 0) {
+          finalSpeedKmh = derivedSpeedKmh;
+          console.log('📐 Using derived speed as fallback:', finalSpeedKmh.toFixed(1), 'km/h');
+        }
+      }
+      
+      lastGpsSpeedRef.current = finalSpeedKmh / 3.6; // Store as m/s
+      
+      // Update speed display
+      setFusedSpeed(finalSpeedKmh);
       
       // Use EKF if available for additional processing
       if (ekfRef.current) {
@@ -157,12 +202,12 @@ export const useEnhancedSensorFusion = ({
         
         if (dt > 0 && dt < 1) { // Reasonable time delta
           ekfRef.current.predict(dt);
-          const ekfSpeed = ekfRef.current.update([gpsSpeedKmh, 0]); // No direct acceleration from GPS
+          const ekfSpeed = ekfRef.current.update([finalSpeedKmh, 0]); // No direct acceleration from GPS
           console.log('📍 GPS + EKF speed:', ekfSpeed.toFixed(1), 'km/h');
         }
       }
       
-      console.log('📍 GPS speed update:', gpsSpeedKmh.toFixed(1), 'km/h');
+      console.log('📍 Final speed update:', finalSpeedKmh.toFixed(1), 'km/h');
       setGpsStatus('✅ GPS Ready');
     };
 
