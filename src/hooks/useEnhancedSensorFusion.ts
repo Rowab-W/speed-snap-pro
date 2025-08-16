@@ -207,6 +207,10 @@ export const useEnhancedSensorFusion = ({
     try {
       console.log('🚀 Initializing enhanced motion sensors...');
       
+      // Check permissions
+      navigator.permissions.query({ name: 'geolocation' }).then(perm => console.log('GPS Permission:', perm.state));
+      navigator.permissions.query({ name: 'accelerometer' as PermissionName }).then(perm => console.log('IMU Permission:', perm.state)).catch(() => console.log('IMU Permission: not available'));
+      
       // Try Capacitor Motion for native mobile support
       try {
         Motion.addListener('accel', (event) => {
