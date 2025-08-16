@@ -150,30 +150,19 @@ export const useEnhancedSensorFusion = ({
       
       lastGpsSpeedRef.current = gpsSpeedMs;
       
-      // GPS-ONLY MODE: Use GPS speed directly without fusion
-      setFusedSpeed(gpsSpeedKmh);
-      fusedSpeedRef.current = gpsSpeedMs;
-      
-      // Update sensor data with GPS speed
-      setSensorData(prev => ({
-        speed: gpsSpeedKmh,
-        acceleration: prev?.acceleration || { x: 0, y: 0, z: 0 },
-        rotationRate: prev?.rotationRate || { alpha: 0, beta: 0, gamma: 0 },
-        timestamp: position.timestamp,
-      }));
-      
-      // Call speed update callback
-      if (onSpeedUpdate) {
-        onSpeedUpdate(gpsSpeedKmh);
+      // Use EKF if available for additional processing
+      if (ekfRef.current) {
+        const currentTime = Date.now();
+        const dt = lastTimestampRef.current ? (currentTime - lastTimestampRef.current) / 1000 : 0.016;
+        
+        if (dt > 0 && dt < 1) { // Reasonable time delta
+          ekfRef.current.predict(dt);
+          const ekfSpeed = ekfRef.current.update([gpsSpeedKmh, 0]); // No direct acceleration from GPS
+          console.log('📍 GPS + EKF speed:', ekfSpeed.toFixed(1), 'km/h');
+        }
       }
       
-      // Add data point for chart
-      if (onDataPointAdded && startTimeRef.current) {
-        const elapsedTime = (position.timestamp - startTimeRef.current) / 1000;
-        onDataPointAdded({ time: elapsedTime, speed: gpsSpeedKmh });
-      }
-      
-      console.log('📍 GPS-ONLY speed update:', gpsSpeedKmh.toFixed(1), 'km/h');
+      console.log('📍 GPS speed update:', gpsSpeedKmh.toFixed(1), 'km/h');
       setGpsStatus('✅ GPS Ready');
     };
 
@@ -213,11 +202,199 @@ export const useEnhancedSensorFusion = ({
     );
   }, [isRunning, onSpeedUpdate, onDataPointAdded, sensorData]);
 
-  // Enhanced IMU sensor initialization - DISABLED FOR TESTING
+  // Enhanced IMU sensor initialization
   const initializeSensors = useCallback(async () => {
-    console.log('🚀 IMU sensors DISABLED - using GPS-only mode for testing');
-    // IMU initialization disabled to test GPS-only speed measurement
-  }, []);
+    try {
+      console.log('🚀 Initializing enhanced motion sensors...');
+      
+      // Try Capacitor Motion for native mobile support
+      try {
+        Motion.addListener('accel', (event) => {
+          const { x, y, z } = event.acceleration;
+          const magnitude = Math.sqrt(x * x + y * y + z * z);
+          const currentTime = Date.now();
+          
+          // Apply Butterworth filtering to reduce noise
+          const filteredAcceleration = IMUFilters.filterAcceleration({ x, y, z });
+          
+          // Calculate horizontal acceleration for sensor fusion
+          const horizontalAccel = Math.sqrt(
+            filteredAcceleration.x * filteredAcceleration.x + 
+            filteredAcceleration.y * filteredAcceleration.y
+          );
+          
+          // Grok's sensor fusion with time management
+          if (prevTimestampRef.current > 0) {
+            const deltaTime = (currentTime - prevTimestampRef.current) / 1000; // Convert to seconds
+            
+            if (deltaTime > 0.001 && deltaTime < 0.5) { // Reasonable time delta (1ms to 500ms)
+              // Use horizontal acceleration for fusion (remove gravity component)
+              const netHorizontalAccel = horizontalAccel - 0.5; // Small bias removal
+              
+              console.log('IMU Update:', { 
+                rawAccel: event.acceleration, 
+                filteredAccel: filteredAcceleration,
+                horizontalAccel: horizontalAccel.toFixed(3),
+                netHorizontalAccel: netHorizontalAccel.toFixed(3),
+                deltaTime: deltaTime.toFixed(3), 
+                currentImuVelocity: imuVelocityRef.current.toFixed(2) 
+              });
+              
+              fuseData(lastGpsSpeedRef.current, Math.max(0, netHorizontalAccel), deltaTime);
+            }
+          }
+          prevTimestampRef.current = currentTime;
+          
+          // Continuous calibration using filtered magnitude
+          const filteredMagnitude = Math.sqrt(
+            filteredAcceleration.x * filteredAcceleration.x + 
+            filteredAcceleration.y * filteredAcceleration.y + 
+            filteredAcceleration.z * filteredAcceleration.z
+          );
+          
+          if (filteredMagnitude > 8.5 && filteredMagnitude < 10.5) {
+            calibrationSamplesRef.current.push(filteredMagnitude);
+            if (calibrationSamplesRef.current.length > 100) {
+              calibrationSamplesRef.current.shift();
+            }
+            calibrateBaseline();
+          }
+          
+          // Update sensor data with filtered values
+          setSensorData(prev => ({
+            speed: fusedSpeedRef.current * 3.6, // Use fused speed in km/h
+            acceleration: filteredAcceleration,
+            rotationRate: prev?.rotationRate || { alpha: 0, beta: 0, gamma: 0 },
+            timestamp: currentTime,
+          }));
+          
+          // Use launch detector for intelligent start detection
+          if (launchDetectorRef.current) {
+            const launchDetected = launchDetectorRef.current.processData(
+              {
+                x: filteredAcceleration.x,
+                y: filteredAcceleration.y,
+                z: filteredAcceleration.z,
+                timestamp: currentTime
+              },
+              fusedSpeedRef.current * 3.6 // Current fused speed in km/h
+            );
+
+            if (launchDetected && onAccelerationDetected) {
+              console.log('🚀 Launch detected by intelligent detection system (Capacitor)!');
+              onAccelerationDetected();
+            }
+          }
+        });
+        
+        console.log('✅ Capacitor Motion sensors initialized');
+      } catch (capacitorError) {
+        console.log('📱 Capacitor Motion not available, falling back to browser APIs');
+        
+        // Fallback to browser DeviceMotionEvent
+        const handleDeviceMotion = (event: DeviceMotionEvent) => {
+          if (!event.accelerationIncludingGravity) return;
+          
+          const rawAcceleration = event.accelerationIncludingGravity;
+          const { x = 0, y = 0, z = 0 } = rawAcceleration;
+          const currentTime = Date.now();
+          
+          // Apply Butterworth filtering to reduce noise
+          const filteredAcceleration = IMUFilters.filterAcceleration({ x, y, z });
+          const rotationRate = event.rotationRate || { alpha: 0, beta: 0, gamma: 0 };
+          const filteredRotation = IMUFilters.filterGyroscope({ 
+            x: rotationRate.alpha || 0, 
+            y: rotationRate.beta || 0, 
+            z: rotationRate.gamma || 0 
+          });
+          
+          // Calculate horizontal acceleration for sensor fusion
+          const horizontalAccel = Math.sqrt(
+            filteredAcceleration.x * filteredAcceleration.x + 
+            filteredAcceleration.y * filteredAcceleration.y
+          );
+          
+          // Grok's sensor fusion with time management
+          if (prevTimestampRef.current > 0) {
+            const deltaTime = (currentTime - prevTimestampRef.current) / 1000; // Convert to seconds
+            
+            if (deltaTime > 0.001 && deltaTime < 0.5) { // Reasonable time delta
+              // Use horizontal acceleration for fusion (remove gravity component)
+              const netHorizontalAccel = horizontalAccel - 0.5; // Small bias removal
+              
+              console.log('IMU Update (Browser):', { 
+                rawAccel: { x, y, z }, 
+                filteredAccel: filteredAcceleration,
+                horizontalAccel: horizontalAccel.toFixed(3),
+                netHorizontalAccel: netHorizontalAccel.toFixed(3),
+                deltaTime: deltaTime.toFixed(3), 
+                currentImuVelocity: imuVelocityRef.current.toFixed(2) 
+              });
+              
+              fuseData(lastGpsSpeedRef.current, Math.max(0, netHorizontalAccel), deltaTime);
+            }
+          }
+          prevTimestampRef.current = currentTime;
+          
+          // Continuous calibration using filtered data
+          const filteredMagnitude = Math.sqrt(
+            filteredAcceleration.x * filteredAcceleration.x + 
+            filteredAcceleration.y * filteredAcceleration.y + 
+            filteredAcceleration.z * filteredAcceleration.z
+          );
+          
+          if (filteredMagnitude > 8.5 && filteredMagnitude < 10.5) {
+            calibrationSamplesRef.current.push(filteredMagnitude);
+            if (calibrationSamplesRef.current.length > 100) {
+              calibrationSamplesRef.current.shift();
+            }
+            calibrateBaseline();
+          }
+          
+          // Update sensor data with filtered values
+          setSensorData({
+            speed: fusedSpeedRef.current * 3.6, // Use fused speed in km/h
+            acceleration: filteredAcceleration,
+            rotationRate: {
+              alpha: filteredRotation.x,
+              beta: filteredRotation.y,
+              gamma: filteredRotation.z
+            },
+            timestamp: currentTime,
+          });
+          
+          // Use launch detector for intelligent start detection
+          if (launchDetectorRef.current) {
+            const launchDetected = launchDetectorRef.current.processData(
+              {
+                x: filteredAcceleration.x,
+                y: filteredAcceleration.y,
+                z: filteredAcceleration.z,
+                timestamp: currentTime
+              },
+              fusedSpeedRef.current * 3.6 // Current fused speed in km/h
+            );
+
+            if (launchDetected && onAccelerationDetected) {
+              console.log('🚀 Launch detected by intelligent detection system (browser)!');
+              onAccelerationDetected();
+            }
+          }
+        };
+        
+        window.addEventListener('devicemotion', handleDeviceMotion);
+        console.log('✅ Browser DeviceMotion sensors initialized');
+      }
+      
+    } catch (error) {
+      console.error('❌ Enhanced sensor initialization failed:', error);
+      toast({
+        title: "Sensor Error",
+        description: "Failed to initialize motion sensors. Some features may not work.",
+        variant: "destructive",
+      });
+    }
+  }, [accelerationThreshold, onAccelerationDetected, calibrateBaseline, fusedSpeed]);
 
   // Start tracking
   const startTracking = useCallback(() => {
