@@ -8,6 +8,9 @@ export default defineConfig(({ mode }) => ({
     host: "::",
     port: 8080,
   },
+  build: {
+    assetsInlineLimit: 0, // Prevents small assets from inlining as data URIs
+  },
   plugins: [
     react(),
     mode === 'development' &&
