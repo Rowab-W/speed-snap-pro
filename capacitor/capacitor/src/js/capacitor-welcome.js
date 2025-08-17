@@ -54,6 +54,9 @@ window.customElements.define(
       main pre {
         white-space: pre-line;
       }
+      .demo-image {
+        max-width: 100%;
+      }
     </style>
     <div>
       <capacitor-welcome-titlebar>
@@ -82,7 +85,7 @@ window.customElements.define(
           <button class="button" id="take-photo">Take Photo</button>
         </p>
         <p>
-          <img id="image" style="max-width: 100%">
+          <img id="image" class="demo-image">
         </p>
       </main>
     </div>

@@ -67,6 +67,17 @@
     --transition-bounce: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
 
     --radius: 0.75rem;
+    
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+    
+    /* Sidebar dimensions */
+    --sidebar-width: 16rem;
+    --sidebar-width-icon: 3rem;
+    --sidebar-width-mobile: 18rem;
 
     --sidebar-background: 0 0% 98%;
 
@@ -228,5 +239,29 @@
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+  }
+
+  /* Chart component styles */
+  .chart-indicator {
+    border-color: var(--indicator-color, hsl(var(--border)));
+    background-color: var(--indicator-color, hsl(var(--muted)));
+  }
+
+  .chart-legend-indicator {
+    background-color: var(--indicator-color, hsl(var(--muted)));
+  }
+
+  /* Sidebar component styles */
+  .sidebar-wrapper {
+    --sidebar-width: var(--sidebar-width);
+    --sidebar-width-icon: var(--sidebar-width-icon);
+  }
+
+  .sidebar-mobile {
+    width: var(--sidebar-width-mobile);
+  }
+
+  .sidebar-skeleton {
+    max-width: var(--skeleton-width, 8rem);
   }
 }
