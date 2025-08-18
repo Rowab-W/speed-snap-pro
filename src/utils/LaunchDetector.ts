@@ -36,7 +36,7 @@ export class LaunchDetector {
 
   constructor(config: Partial<LaunchDetectionConfig> = {}) {
     this.config = {
-      horizontalAccelThreshold: 2.0, // m/s² - reasonable for car launch detection
+      horizontalAccelThreshold: 0.1, // m/s² - Grok's lower threshold for better sensitivity
       verticalAccelLimit: 3.0, // m/s² - ignore if too much vertical movement
       speedThreshold: 3.0, // km/h - must be nearly stationary
       sustainedDurationMs: 250, // 250ms of sustained acceleration

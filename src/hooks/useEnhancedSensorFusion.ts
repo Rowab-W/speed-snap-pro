@@ -133,21 +133,26 @@ export const useEnhancedSensorFusion = ({
     return R * c; // Distance in meters
   }, []);
 
-  // Derive speed from consecutive position changes
-  const deriveSpeed = useCallback((currentPos: GeolocationPosition): number => {
-    if (prevPosRef.current) {
-      const dist = getDistance(prevPosRef.current, currentPos);
-      const timeDiff = (currentPos.timestamp - prevPosRef.current.timestamp) / 1000;
-      if (timeDiff > 0) {
-        const speedMs = dist / timeDiff; // m/s
-        const speedKmh = speedMs * 3.6; // Convert to km/h
-        console.log('📐 Derived speed:', { dist: dist.toFixed(2), timeDiff: timeDiff.toFixed(2), speedKmh: speedKmh.toFixed(2) });
-        return speedKmh;
-      }
+  // Grok's optimized fallback speed calculation using Haversine formula
+  const calcSpeed = useCallback((pos: GeolocationPosition): number => {
+    if (!prevPosRef.current) {
+      prevPosRef.current = pos;
+      return 0;
     }
-    prevPosRef.current = currentPos;
-    return 0;
-  }, [getDistance]);
+    const R = 6371; // Earth radius km
+    const dLat = (pos.coords.latitude - prevPosRef.current.coords.latitude) * Math.PI / 180;
+    const dLon = (pos.coords.longitude - prevPosRef.current.coords.longitude) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) + 
+              Math.cos(prevPosRef.current.coords.latitude * Math.PI / 180) * 
+              Math.cos(pos.coords.latitude * Math.PI / 180) * 
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const dist = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)) * R; // km
+    const time = (pos.timestamp - prevPosRef.current.timestamp) / 3600000; // hours
+    prevPosRef.current = pos;
+    const speedKmh = time > 0 ? dist / time : 0; // km/h
+    console.log('📐 Grok fallback speed calc:', { dist: dist.toFixed(4), time: time.toFixed(6), speedKmh: speedKmh.toFixed(2) });
+    return speedKmh;
+  }, []);
 
   // Enhanced GPS tracking with continuous updates
   const initializeGPS = useCallback(() => {
@@ -181,12 +186,12 @@ export const useEnhancedSensorFusion = ({
         return;
       }
       
-      // Use derived speed as fallback if GPS speed is unreliable or zero
+      // Grok's fallback: Use calculated speed if GPS speed is 0 or unreliable
       if (gpsSpeedMs === 0 || gpsSpeedMs === null) {
-        const derivedSpeedKmh = deriveSpeed(position);
-        if (derivedSpeedKmh > 0) {
-          finalSpeedKmh = derivedSpeedKmh;
-          console.log('📐 Using derived speed as fallback:', finalSpeedKmh.toFixed(1), 'km/h');
+        const fallbackSpeedKmh = calcSpeed(position);
+        if (fallbackSpeedKmh > 0) {
+          finalSpeedKmh = fallbackSpeedKmh;
+          console.log('📐 Using Grok fallback speed:', finalSpeedKmh.toFixed(1), 'km/h');
         }
       }
       
@@ -266,10 +271,34 @@ export const useEnhancedSensorFusion = ({
           // Apply Butterworth filtering to reduce noise
           const filteredAcceleration = IMUFilters.filterAcceleration({ x, y, z });
           
-          // Calculate horizontal acceleration for sensor fusion
-          const horizontalAccel = Math.sqrt(
+          // Note: Capacitor Motion acceleration events don't include rotation data
+          // Use simplified gravity compensation without rotation data for now
+          const filteredMagnitude = Math.sqrt(
             filteredAcceleration.x * filteredAcceleration.x + 
-            filteredAcceleration.y * filteredAcceleration.y
+            filteredAcceleration.y * filteredAcceleration.y + 
+            filteredAcceleration.z * filteredAcceleration.z
+          );
+          
+          // Grok's simplified gravity compensation - assume device is roughly upright
+          // Remove estimated gravity component from Z axis
+          const gravityEstimate = filteredMagnitude > 8 && filteredMagnitude < 12 ? 9.81 : 0;
+          const linearAccel = {
+            x: filteredAcceleration.x,
+            y: filteredAcceleration.y,
+            z: filteredAcceleration.z - gravityEstimate
+          };
+          
+          console.log('🌍 Simplified gravity compensation:', { 
+            raw: { x: x.toFixed(2), y: y.toFixed(2), z: z.toFixed(2) },
+            filtered: { x: filteredAcceleration.x.toFixed(2), y: filteredAcceleration.y.toFixed(2), z: filteredAcceleration.z.toFixed(2) },
+            gravity: gravityEstimate.toFixed(2),
+            linear: { x: linearAccel.x.toFixed(2), y: linearAccel.y.toFixed(2), z: linearAccel.z.toFixed(2) }
+          });
+          
+          // Calculate horizontal acceleration for sensor fusion using linear acceleration
+          const horizontalAccel = Math.sqrt(
+            linearAccel.x * linearAccel.x + 
+            linearAccel.y * linearAccel.y
           );
           
           // Grok's sensor fusion with time management
@@ -294,26 +323,26 @@ export const useEnhancedSensorFusion = ({
           }
           prevTimestampRef.current = currentTime;
           
-          // Continuous calibration using filtered magnitude
-          const filteredMagnitude = Math.sqrt(
-            filteredAcceleration.x * filteredAcceleration.x + 
-            filteredAcceleration.y * filteredAcceleration.y + 
-            filteredAcceleration.z * filteredAcceleration.z
-          );
+           // Continuous calibration using filtered magnitude
+           const calibrationMagnitude = Math.sqrt(
+             filteredAcceleration.x * filteredAcceleration.x + 
+             filteredAcceleration.y * filteredAcceleration.y + 
+             filteredAcceleration.z * filteredAcceleration.z
+           );
+           
+           if (calibrationMagnitude > 8.5 && calibrationMagnitude < 10.5) {
+             calibrationSamplesRef.current.push(calibrationMagnitude);
+             if (calibrationSamplesRef.current.length > 100) {
+               calibrationSamplesRef.current.shift();
+             }
+             calibrateBaseline();
+           }
           
-          if (filteredMagnitude > 8.5 && filteredMagnitude < 10.5) {
-            calibrationSamplesRef.current.push(filteredMagnitude);
-            if (calibrationSamplesRef.current.length > 100) {
-              calibrationSamplesRef.current.shift();
-            }
-            calibrateBaseline();
-          }
-          
-          // Update sensor data with filtered values
+          // Update sensor data with filtered values and simplified rotation
           setSensorData(prev => ({
             speed: fusedSpeedRef.current * 3.6, // Use fused speed in km/h
-            acceleration: filteredAcceleration,
-            rotationRate: prev?.rotationRate || { alpha: 0, beta: 0, gamma: 0 },
+            acceleration: linearAccel, // Use gravity-compensated linear acceleration
+            rotationRate: { alpha: 0, beta: 0, gamma: 0 }, // Capacitor Motion doesn't provide rotation in accel events
             timestamp: currentTime,
           }));
           
@@ -321,9 +350,9 @@ export const useEnhancedSensorFusion = ({
           if (launchDetectorRef.current) {
             const launchDetected = launchDetectorRef.current.processData(
               {
-                x: filteredAcceleration.x,
-                y: filteredAcceleration.y,
-                z: filteredAcceleration.z,
+                x: linearAccel.x, // Use gravity-compensated acceleration
+                y: linearAccel.y,
+                z: linearAccel.z,
                 timestamp: currentTime
               },
               fusedSpeedRef.current * 3.6 // Current fused speed in km/h
