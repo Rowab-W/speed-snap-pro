@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { Play, Square, RotateCcw, Download, Zap, TestTube } from 'lucide-react';
+import { Play, Square, RotateCcw, Download, Zap, TestTube, Smartphone } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useUnits } from '@/contexts/UnitsContext';
 import SpeedChart from './SpeedChart';
@@ -14,6 +14,7 @@ import { ResultsPanel } from './ResultsPanel';
 import { PlacementGuide } from './PlacementGuide';
 import { supabase } from '@/integrations/supabase/client';
 import { soundNotifier } from '../utils/sounds';
+import { Motion } from '@capacitor/motion';
 
 interface TimingResults {
   '0-20': number | null;
@@ -65,6 +66,7 @@ const SpeedSnap: React.FC = () => {
   const [targetHit, setTargetHit] = useState(false);
   const [hitTargetLabel, setHitTargetLabel] = useState<string | null>(null);
   const [showPlacementGuide, setShowPlacementGuide] = useState(false);
+  const [motionPermissionGranted, setMotionPermissionGranted] = useState(false);
 
   const startTimeRef = useRef<number | null>(null);
   const animationFrameRef = useRef<number | null>(null);
@@ -99,6 +101,43 @@ const SpeedSnap: React.FC = () => {
       }
     };
   }, [isMeasuring, updateTimer]);
+
+  // Motion permission handler
+  const enableSensors = useCallback(async () => {
+    try {
+      // Request permission for iOS devices
+      if (typeof DeviceMotionEvent !== 'undefined' && typeof (DeviceMotionEvent as any).requestPermission === 'function') {
+        const permission = await (DeviceMotionEvent as any).requestPermission();
+        if (permission !== 'granted') {
+          toast({
+            title: "Permission Denied",
+            description: "Motion sensors permission is required for accurate measurements",
+            variant: "destructive"
+          });
+          return;
+        }
+      }
+      
+      // Add Capacitor Motion listener
+      await Motion.addListener('accel', (event) => {
+        console.log('Capacitor Motion Event:', event);
+      });
+      
+      setMotionPermissionGranted(true);
+      
+      toast({
+        title: "Sensors Enabled",
+        description: "Motion sensors are now active for enhanced accuracy",
+      });
+    } catch (error) {
+      console.error('Motion permission error:', error);
+      toast({
+        title: "Sensor Error",
+        description: "Failed to enable motion sensors. Try again or check device settings.",
+        variant: "destructive"
+      });
+    }
+  }, []);
 
   // Handle acceleration detection callback (Grok's logic implementation)
   const handleAccelerationDetected = useCallback(() => {
@@ -302,7 +341,6 @@ const SpeedSnap: React.FC = () => {
       return newTimes;
     });
   }, [distance, elapsedTime, isRunning]);
-
 
   const handlePlacementGuideClose = useCallback(async () => {
     setShowPlacementGuide(false);
@@ -737,6 +775,25 @@ const SpeedSnap: React.FC = () => {
           </div>
           <p className="text-muted-foreground">Professional Acceleration Timer</p>
         </div>
+
+        {/* Motion Permission Button */}
+        {!motionPermissionGranted && (
+          <Card className="p-4 border-primary/20 bg-primary/5">
+            <div className="text-center space-y-3">
+              <div className="flex items-center justify-center gap-2 text-primary">
+                <Smartphone className="w-5 h-5" />
+                <span className="font-medium">Enable Motion Sensors</span>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                For best accuracy, enable motion sensor permissions
+              </p>
+              <Button onClick={enableSensors} className="w-full">
+                <Smartphone className="w-4 h-4 mr-2" />
+                Enable Sensors
+              </Button>
+            </div>
+          </Card>
+        )}
 
         {/* GPS Accuracy Warning */}
         {gpsAccuracy !== null && gpsAccuracy > 10 && (
