@@ -150,10 +150,10 @@ export class ButterworthFilter {
  * Pre-configured filter instances for common use cases
  */
 export class IMUFilters {
-  // Pre-configured filters for common use cases - Grok's optimized settings
-  static accelerationLowPass = new ButterworthFilter(2, 0.5, 60, 'lowpass');  // Reduced cutoff to 0.5 Hz
+  // Pre-configured filters for common use cases - restored reasonable settings
+  static accelerationLowPass = new ButterworthFilter(2, 5, 60, 'lowpass');    // Increased from 0.5Hz to 5Hz
   static accelerationHighPass = new ButterworthFilter(2, 0.1, 60, 'highpass');
-  static gyroscopeLowPass = new ButterworthFilter(2, 0.5, 60, 'lowpass');     // Reduced cutoff to 0.5 Hz
+  static gyroscopeLowPass = new ButterworthFilter(2, 10, 60, 'lowpass');      // Increased from 0.5Hz to 10Hz
 
   /**
    * Apply comprehensive filtering to accelerometer data

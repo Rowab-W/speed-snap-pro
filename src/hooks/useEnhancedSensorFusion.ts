@@ -133,7 +133,7 @@ export const useEnhancedSensorFusion = ({
     return R * c; // Distance in meters
   }, []);
 
-  // Grok's optimized fallback speed calculation using Haversine formula
+  // Fixed fallback speed calculation using Haversine formula
   const calcSpeed = useCallback((pos: GeolocationPosition): number => {
     if (!prevPosRef.current) {
       prevPosRef.current = pos;
@@ -147,11 +147,17 @@ export const useEnhancedSensorFusion = ({
               Math.cos(pos.coords.latitude * Math.PI / 180) * 
               Math.sin(dLon/2) * Math.sin(dLon/2);
     const dist = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)) * R; // km
-    const time = (pos.timestamp - prevPosRef.current.timestamp) / 3600000; // hours
+    const timeSeconds = (pos.timestamp - prevPosRef.current.timestamp) / 1000; // seconds
     prevPosRef.current = pos;
-    const speedKmh = time > 0 ? dist / time : 0; // km/h
-    console.log('📐 Grok fallback speed calc:', { dist: dist.toFixed(4), time: time.toFixed(6), speedKmh: speedKmh.toFixed(2) });
-    return speedKmh;
+    
+    // Only calculate speed if we have reasonable time difference (0.5-10 seconds)
+    if (timeSeconds >= 0.5 && timeSeconds <= 10) {
+      const speedKmh = (dist / timeSeconds) * 3600; // km/h (dist/time * 3600 to convert km/s to km/h)
+      console.log('📐 Fixed fallback speed calc:', { dist: dist.toFixed(4), timeSeconds: timeSeconds.toFixed(2), speedKmh: speedKmh.toFixed(2) });
+      return Math.min(speedKmh, 300); // Cap at reasonable max speed
+    }
+    
+    return 0;
   }, []);
 
   // Enhanced GPS tracking with continuous updates
