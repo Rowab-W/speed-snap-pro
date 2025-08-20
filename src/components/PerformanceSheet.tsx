@@ -2,7 +2,30 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { formatDistanceToNow } from 'date-fns';
+import { PerformanceReport } from './PerformanceReport';
+import { BarChart3 } from 'lucide-react';
+
+interface DataPoint {
+  time: number;
+  speed: number;
+}
+
+interface TimingResults {
+  '0-20': number | null;
+  '0-30': number | null;
+  '0-40': number | null;
+  '0-60': number | null;
+  '0-80': number | null;
+  '0-100': number | null;
+  '0-120': number | null;
+  '0-130': number | null;
+  '0-200': number | null;
+  '0-250': number | null;
+  quarterMile: number | null;
+  halfMile: number | null;
+}
 
 interface PerformanceRecord {
   id: string;
@@ -12,9 +35,20 @@ interface PerformanceRecord {
   recorded_at: string;
 }
 
-const PerformanceSheet = () => {
+interface PerformanceSheetProps {
+  latestResults?: {
+    dataPoints: DataPoint[];
+    times: TimingResults;
+    maxSpeed: number;
+    totalDistance: number;
+    totalTime: number;
+  };
+}
+
+const PerformanceSheet: React.FC<PerformanceSheetProps> = ({ latestResults }) => {
   const [records, setRecords] = useState<PerformanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showReport, setShowReport] = useState(false);
 
   useEffect(() => {
     fetchPerformanceRecords();
@@ -42,6 +76,20 @@ const PerformanceSheet = () => {
     return `${seconds}s`;
   };
 
+  // Show detailed report if requested
+  if (showReport && latestResults) {
+    return (
+      <PerformanceReport
+        dataPoints={latestResults.dataPoints}
+        times={latestResults.times}
+        maxSpeed={latestResults.maxSpeed}
+        totalDistance={latestResults.totalDistance}
+        totalTime={latestResults.totalTime}
+        onBack={() => setShowReport(false)}
+      />
+    );
+  }
+
   if (loading) {
     return (
       <div className="p-6 text-center">
@@ -63,7 +111,15 @@ const PerformanceSheet = () => {
 
   return (
     <div className="p-4 space-y-4">
-      <div className="text-lg font-semibold">Performance History</div>
+      <div className="flex items-center justify-between">
+        <div className="text-lg font-semibold">Performance History</div>
+        {latestResults && (
+          <Button onClick={() => setShowReport(true)} size="sm">
+            <BarChart3 className="w-4 h-4 mr-2" />
+            View Latest Report
+          </Button>
+        )}
+      </div>
       
       <div className="grid gap-3">
         {records.map((record, index) => (

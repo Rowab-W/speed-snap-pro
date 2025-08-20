@@ -36,7 +36,19 @@ interface DataPoint {
   speed: number;
 }
 
-const SpeedSnap: React.FC = () => {
+interface LatestResults {
+  dataPoints: DataPoint[];
+  times: TimingResults;
+  maxSpeed: number;
+  totalDistance: number;
+  totalTime: number;
+}
+
+interface SpeedSnapProps {
+  onMeasurementComplete?: (results: LatestResults) => void;
+}
+
+const SpeedSnap: React.FC<SpeedSnapProps> = ({ onMeasurementComplete }) => {
   const { getTargets, getSpeedUnit } = useUnits();
   const targets = getTargets();
   const [isRunning, setIsRunning] = useState(false);
@@ -496,6 +508,17 @@ const SpeedSnap: React.FC = () => {
 
     // Save performance record to database
     savePerformanceRecord();
+    
+    // Call measurement complete callback with results
+    if (onMeasurementComplete) {
+      onMeasurementComplete({
+        dataPoints,
+        times,
+        maxSpeed,
+        totalDistance: distance,
+        totalTime: elapsedTime
+      });
+    }
     
     // GPS status managed by enhanced sensor fusion
     setHasResults(true);
