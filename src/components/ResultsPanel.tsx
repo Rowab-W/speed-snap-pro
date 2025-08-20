@@ -22,9 +22,10 @@ interface ResultsPanelProps {
   hasResults: boolean;
   isRunning?: boolean;
   hitTargetLabel?: string | null;
+  maxSpeed?: number;
 }
 
-export const ResultsPanel: React.FC<ResultsPanelProps> = ({ times, hasResults, isRunning = false, hitTargetLabel = null }) => {
+export const ResultsPanel: React.FC<ResultsPanelProps> = ({ times, hasResults, isRunning = false, hitTargetLabel = null, maxSpeed = 0 }) => {
   const { getTargets, getSpeedUnit } = useUnits();
   const targets = getTargets();
 
@@ -68,6 +69,13 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ times, hasResults, i
           <div className="text-sm text-muted-foreground">1/2 Mile</div>
           <div className={`text-lg font-bold ${times.halfMile ? 'text-primary' : 'text-muted-foreground'}`}>
             {times.halfMile ? `${times.halfMile.toFixed(2)}s` : '--'}
+          </div>
+        </div>
+        
+        <div className="text-center p-3 bg-muted rounded-lg">
+          <div className="text-sm text-muted-foreground">Top Speed</div>
+          <div className={`text-lg font-bold ${maxSpeed > 0 ? 'text-primary' : 'text-muted-foreground'}`}>
+            {maxSpeed > 0 ? `${maxSpeed.toFixed(1)} ${getSpeedUnit()}` : '--'}
           </div>
         </div>
       </div>

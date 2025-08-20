@@ -44,6 +44,7 @@ const SpeedSnap: React.FC = () => {
   const [isMeasuring, setIsMeasuring] = useState(false);
   const [waitingForAcceleration, setWaitingForAcceleration] = useState(false);
   const [speed, setSpeed] = useState(0);
+  const [maxSpeed, setMaxSpeed] = useState(0);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [distance, setDistance] = useState(0);
   const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
@@ -191,6 +192,11 @@ const SpeedSnap: React.FC = () => {
       console.log('🏃 Enhanced speed update:', newSpeed.toFixed(2), 'km/h');
       setSpeed(newSpeed);
       
+      // Track maximum speed during measurement
+      if (isMeasuring && newSpeed > maxSpeed) {
+        setMaxSpeed(newSpeed);
+      }
+      
       // Auto-trigger measurement if waiting for acceleration
       if (waitingForAcceleration && newSpeed > 1 && startTriggered) {
         console.log('🚀 Speed detected while waiting - auto-starting measurement');
@@ -219,6 +225,7 @@ const SpeedSnap: React.FC = () => {
     setIsMeasuring(false); // Not measuring until launch detected
     setIsRunning(false); // Not running until launch detected
     setSpeed(0);
+    setMaxSpeed(0);
     setElapsedTime(0);
     setDistance(0);
     setDataPoints([]);
@@ -356,6 +363,7 @@ const SpeedSnap: React.FC = () => {
     setStartTriggered(true);
     setWaitingForAcceleration(true);
     setSpeed(0);
+    setMaxSpeed(0);
     setElapsedTime(0);
     setDistance(0);
     setDataPoints([]);
@@ -394,6 +402,7 @@ const SpeedSnap: React.FC = () => {
     setIsRunning(false);
     setWaitingForAcceleration(false);
     setSpeed(0); // Set speed display = "0 km/h"
+    setMaxSpeed(0);
     // GPS status managed by enhanced sensor fusion
     startTimeRef.current = null; // Reset timer
 
@@ -542,6 +551,7 @@ const SpeedSnap: React.FC = () => {
     setStartTriggered(false);
     setIsMeasuring(false);
     setSpeed(0);
+    setMaxSpeed(0);
     setElapsedTime(0);
     setDistance(0);
     setDataPoints([]);
@@ -610,6 +620,7 @@ const SpeedSnap: React.FC = () => {
 
     setIsRunning(true);
     setSpeed(0);
+    setMaxSpeed(0);
     setElapsedTime(0);
     setDistance(0);
     setDataPoints([]);
@@ -680,6 +691,10 @@ const SpeedSnap: React.FC = () => {
       
       const dataPoint = simulationData[currentIndex];
       setSpeed(dataPoint.speed);
+      
+      // Track maximum speed during simulation
+      setMaxSpeed(prevMax => Math.max(prevMax, dataPoint.speed));
+      
       setElapsedTime(dataPoint.time);
       setDataPoints(prev => [...prev, dataPoint]);
       
@@ -881,6 +896,7 @@ const SpeedSnap: React.FC = () => {
           hasResults={hasResults} 
           isRunning={isRunning || waitingForAcceleration}
           hitTargetLabel={hitTargetLabel}
+          maxSpeed={maxSpeed}
         />
 
         {/* Chart */}
