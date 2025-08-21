@@ -74,22 +74,26 @@ const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
     return null
   }
 
-  // Create CSS custom properties dynamically
-  const chartVars = React.useMemo(() => {
-    const vars: Record<string, string> = {}
-    colorConfig.forEach(([key, itemConfig]) => {
-      const lightColor = itemConfig.theme?.light || itemConfig.color
-      const darkColor = itemConfig.theme?.dark || itemConfig.color
-      if (lightColor) vars[`--color-${key}`] = lightColor
-      if (darkColor) vars[`--color-${key}-dark`] = darkColor
-    })
-    return vars
-  }, [colorConfig])
-
   return (
-    <div 
-      className="chart-style-vars"
-      style={chartVars as React.CSSProperties}
+    <style
+      dangerouslySetInnerHTML={{
+        __html: Object.entries(THEMES)
+          .map(
+            ([theme, prefix]) => `
+${prefix} [data-chart=${id}] {
+${colorConfig
+  .map(([key, itemConfig]) => {
+    const color =
+      itemConfig.theme?.[theme as keyof typeof itemConfig.theme] ||
+      itemConfig.color
+    return color ? `  --color-${key}: ${color};` : null
+  })
+  .join("\n")}
+}
+`
+          )
+          .join("\n"),
+      }}
     />
   )
 }
@@ -202,7 +206,7 @@ const ChartTooltipContent = React.forwardRef<
                       !hideIndicator && (
                         <div
                           className={cn(
-                            "chart-indicator shrink-0 rounded-[2px]",
+                            "shrink-0 rounded-[2px] border-[--color-border] bg-[--color-bg]",
                             {
                               "h-2.5 w-2.5": indicator === "dot",
                               "w-1": indicator === "line",
@@ -211,9 +215,12 @@ const ChartTooltipContent = React.forwardRef<
                               "my-0.5": nestLabel && indicator === "dashed",
                             }
                           )}
-                          style={{
-                            "--indicator-color": indicatorColor,
-                          } as React.CSSProperties}
+                          style={
+                            {
+                              "--color-bg": indicatorColor,
+                              "--color-border": indicatorColor,
+                            } as React.CSSProperties
+                          }
                         />
                       )
                     )}
@@ -291,10 +298,10 @@ const ChartLegendContent = React.forwardRef<
                 <itemConfig.icon />
               ) : (
                 <div
-                  className="chart-legend-indicator h-2 w-2 shrink-0 rounded-[2px]"
+                  className="h-2 w-2 shrink-0 rounded-[2px]"
                   style={{
-                    "--indicator-color": item.color,
-                  } as React.CSSProperties}
+                    backgroundColor: item.color,
+                  }}
                 />
               )}
               {itemConfig?.label}
