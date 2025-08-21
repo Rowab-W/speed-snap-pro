@@ -157,7 +157,7 @@ export const useGPSTracking = ({
           position.coords.latitude, position.coords.longitude
         );
         const dt = (timestamp - lastTimestampRef.current) / 1000;
-        if (dt > 0.5 && dt < 10) { // Only use if reasonable time difference
+        if (dt > 0.2 && dt < 10) { // Use shorter time threshold for better walking speed accuracy
           const calculatedSpeed = distance / dt;
           console.log('Position-based speed:', calculatedSpeed, 'm/s', 'distance:', distance.toFixed(2), 'dt:', dt.toFixed(2));
           speedMs = calculatedSpeed;
@@ -165,17 +165,25 @@ export const useGPSTracking = ({
       }
     }
     
-    // Use GPS speed as fallback or if it's higher (for vehicles)
+    // For walking speeds, prefer position-based calculation over potentially inaccurate GPS speed
     if (position.coords.speed !== null && position.coords.speed >= 0) {
       const gpsSpeed = position.coords.speed;
       console.log('GPS speed:', gpsSpeed, 'm/s');
       
-      // Use GPS speed if it's significantly higher or if position calculation failed
-      if (gpsSpeed > speedMs * 1.5 || speedMs === 0) {
-        speedMs = gpsSpeed;
-        console.log('Using GPS speed');
+      // For low speeds (walking), prefer calculated speed. For higher speeds, prefer GPS
+      if (speedMs > 0) {
+        // If calculated speed is reasonable for walking (0.5-8 km/h), prefer it
+        const calculatedKmh = speedMs * 3.6;
+        if (calculatedKmh >= 0.5 && calculatedKmh <= 15) {
+          console.log('Using calculated speed for walking/jogging');
+          // Keep speedMs as calculated
+        } else if (gpsSpeed > speedMs) {
+          speedMs = gpsSpeed;
+          console.log('Using GPS speed for higher speeds');
+        }
       } else {
-        console.log('Using calculated speed');
+        speedMs = gpsSpeed;
+        console.log('Using GPS speed (no calculated speed available)');
       }
     }
     
