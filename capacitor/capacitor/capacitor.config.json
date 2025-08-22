@@ -1,0 +1,10 @@
+{
+  "appId": "com.speedsnap.app",
+  "appName": "SpeedSnap",
+  "webDir": "dist",
+  "plugins": {
+    "SplashScreen": {
+      "launchAutoHide": false
+    }
+  }
+}

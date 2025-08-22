@@ -67,6 +67,17 @@
     --transition-bounce: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
 
     --radius: 0.75rem;
+    
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+    
+    /* Sidebar dimensions */
+    --sidebar-width: 16rem;
+    --sidebar-width-icon: 3rem;
+    --sidebar-width-mobile: 18rem;
 
     --sidebar-background: 0 0% 98%;
 
@@ -175,11 +186,82 @@
     }
   }
 
+  /* Pop animation for target hits */
+  .target-pop {
+    animation: target-pop 1s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  }
+
+  @keyframes target-pop {
+    0% {
+      transform: scale(1);
+    }
+    30% {
+      transform: scale(1.2);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+
+  /* Target hit highlighting effect */
+  .target-hit-highlight {
+    animation: target-highlight 5s ease-out;
+  }
+
+  @keyframes target-highlight {
+    0% {
+      background-color: hsl(var(--success) / 0.3);
+      border: 3px solid hsl(var(--success));
+      box-shadow: 
+        0 0 30px hsl(var(--success) / 0.8),
+        0 0 60px hsl(var(--success) / 0.4),
+        inset 0 0 20px hsl(var(--success) / 0.2);
+      transform: scale(1.1);
+    }
+    50% {
+      background-color: hsl(var(--success) / 0.2);
+      box-shadow: 
+        0 0 40px hsl(var(--success) / 0.6),
+        0 0 80px hsl(var(--success) / 0.3);
+      transform: scale(1.05);
+    }
+    100% {
+      background-color: transparent;
+      border: 3px solid transparent;
+      box-shadow: none;
+      transform: scale(1);
+    }
+  }
+
   /* Speed text gradient */
   .speed-gradient {
     background: var(--gradient-speed);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+  }
+
+  /* Chart component styles */
+  .chart-indicator {
+    border-color: var(--indicator-color, hsl(var(--border)));
+    background-color: var(--indicator-color, hsl(var(--muted)));
+  }
+
+  .chart-legend-indicator {
+    background-color: var(--indicator-color, hsl(var(--muted)));
+  }
+
+  /* Sidebar component styles */
+  .sidebar-wrapper {
+    --sidebar-width: var(--sidebar-width);
+    --sidebar-width-icon: var(--sidebar-width-icon);
+  }
+
+  .sidebar-mobile {
+    width: var(--sidebar-width-mobile);
+  }
+
+  .sidebar-skeleton {
+    max-width: var(--skeleton-width, 8rem);
   }
 }

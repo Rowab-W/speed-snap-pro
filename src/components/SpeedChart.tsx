@@ -31,12 +31,16 @@ interface DataPoint {
 }
 
 interface TimingResults {
+  '0-20': number | null;
   '0-30': number | null;
+  '0-40': number | null;
   '0-60': number | null;
+  '0-80': number | null;
   '0-100': number | null;
+  '0-120': number | null;
+  '0-130': number | null;
   '0-200': number | null;
   '0-250': number | null;
-  '0-300': number | null;
   quarterMile: number | null;
   halfMile: number | null;
 }
@@ -251,30 +255,6 @@ const SpeedChart = forwardRef<SpeedChartRef, SpeedChartProps>(({ dataPoints, tim
     };
   }
 
-  if (times['0-300']) {
-    annotations['line300'] = {
-      type: 'line',
-      xMin: times['0-300'],
-      xMax: times['0-300'],
-      borderColor: 'hsl(300 60% 50%)',
-      borderWidth: 3,
-      borderDash: [5, 5],
-      label: {
-        content: '0-300 km/h',
-        enabled: true,
-        position: 'end',
-        yAdjust: -10,
-        backgroundColor: 'hsl(300 60% 50%)',
-        color: 'hsl(0 0% 100%)',
-        font: {
-          size: 12,
-          weight: 'bold',
-        },
-        padding: 6,
-        cornerRadius: 4,
-      },
-    };
-  }
 
   // Add horizontal reference grid lines
   annotations['speed50'] = {

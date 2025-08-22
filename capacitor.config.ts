@@ -1,7 +1,7 @@
 import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.speedsnap.pro',
+  appId: 'app.lovable.6b550f8a61504b208c53bc7d4e89bf80',
   appName: 'speed-snap-pro',
   webDir: 'dist',
   server: {
