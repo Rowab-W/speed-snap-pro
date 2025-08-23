@@ -31,31 +31,74 @@ export const useSensorFusion = ({
 
   const initializeSensors = useCallback(async () => {
     try {
-      // Initialize Capacitor Motion sensors for better mobile support
+      // Try LinearAccelerometer first (excludes gravity)
+      if ('LinearAccelerometer' in window) {
+        try {
+          const linearAccel = new (window as any).LinearAccelerometer({ frequency: 50 });
+          linearAccel.addEventListener('reading', () => {
+            accelerometerRef.current = {
+              x: linearAccel.x || 0,
+              y: linearAccel.y || 0,
+              z: linearAccel.z || 0,
+            };
+            
+            // Only check acceleration if START button was pressed AND we're waiting for acceleration
+            if (waitingForAccelerationRef.current) {
+              const { x, y, z } = accelerometerRef.current;
+              const magnitude = Math.sqrt(x * x + y * y + z * z);
+              console.log('🏃 LinearAccelerometer reading:', { x, y, z, magnitude, threshold: accelerationThreshold });
+              
+              // Higher threshold for LinearAccelerometer since gravity is removed
+              if (magnitude > 2.5) {
+                console.log('🚀 Linear acceleration threshold exceeded! Triggering measurement start');
+                waitingForAccelerationRef.current = false;
+                onAccelerationDetected();
+                
+                toast({
+                  title: "Measurement Started!",
+                  description: "Linear acceleration detected",
+                });
+              }
+            }
+          });
+          
+          linearAccel.start();
+          console.log('✅ LinearAccelerometer initialized (gravity excluded)');
+          
+          return () => {
+            linearAccel.stop();
+          };
+        } catch (error) {
+          console.log('❌ LinearAccelerometer failed, falling back to regular accelerometer');
+          // Fall through to Capacitor Motion
+        }
+      }
+
+      // Fallback to Capacitor Motion or regular accelerometer
       try {
         const motionListener = await Motion.addListener('accel', (event) => {
+          // Subtract gravity approximation from Z-axis for regular accelerometer
           accelerometerRef.current = {
             x: event.acceleration.x,
             y: event.acceleration.y,
-            z: event.acceleration.z,
+            z: event.acceleration.z - 9.8, // Remove gravity
           };
           
           // Only check acceleration if START button was pressed AND we're waiting for acceleration
           if (waitingForAccelerationRef.current) {
             const { x, y, z } = accelerometerRef.current;
             const magnitude = Math.sqrt(x * x + y * y + z * z);
-            console.log('🏃 Accelerometer reading:', { x, y, z, magnitude, threshold: accelerationThreshold });
+            console.log('🏃 Capacitor accelerometer reading (gravity removed):', { x, y, z, magnitude, threshold: accelerationThreshold });
             
-            // Use lower threshold for walking (0.3 m/s² instead of 0.5)
-            if (magnitude > 0.3) {
+            // Higher threshold since we're removing gravity
+            if (magnitude > 2.5) {
               console.log('🚀 Acceleration threshold exceeded! Triggering measurement start');
-              // Trigger actual measurement start
               waitingForAccelerationRef.current = false;
               onAccelerationDetected();
               
               toast({
                 title: "Measurement Started!",
-                description: "Tracking your acceleration now",
+                description: "Motion detected via accelerometer",
               });
             }
           }
@@ -65,30 +108,31 @@ export const useSensorFusion = ({
           motionListener.remove();
         };
       } catch (error) {
-        // Fallback to browser motion events if Capacitor is not available
+        // Fallback to browser DeviceMotionEvent if Capacitor is not available
         if ('DeviceMotionEvent' in window) {
           const handleDeviceMotion = (event: DeviceMotionEvent) => {
             if (event.acceleration) {
+              // Subtract gravity approximation from Z-axis for browser accelerometer
               accelerometerRef.current = {
                 x: event.acceleration.x || 0,
                 y: event.acceleration.y || 0,
-                z: event.acceleration.z || 0,
+                z: (event.acceleration.z || 0) - 9.8, // Remove gravity
               };
               
               // Only check acceleration if START button was pressed AND we're waiting for acceleration
               if (waitingForAccelerationRef.current) {
                 const { x, y, z } = accelerometerRef.current;
                 const magnitude = Math.sqrt(x * x + y * y + z * z);
+                console.log('🏃 Browser accelerometer reading (gravity removed):', { x, y, z, magnitude });
                 
-                // Use lower threshold for walking
-                if (magnitude > 0.3) {
-                  // Trigger actual measurement start
+                // Higher threshold since gravity is removed
+                if (magnitude > 2.5) {
                   waitingForAccelerationRef.current = false;
                   onAccelerationDetected();
                   
                   toast({
                     title: "Measurement Started!",
-                    description: "Tracking your acceleration now",
+                    description: "Motion detected via browser",
                   });
                 }
               }

@@ -93,7 +93,7 @@ const SpeedSnap: React.FC = () => {
     setSpeed(newSpeed);
     
     // Check if we should start measurement based on speed (fallback for acceleration detection)
-    if (waitingForAcceleration && !isRunning && newSpeed > 3) {
+    if (waitingForAcceleration && !isRunning && newSpeed > 5) {
       console.log('🚀 Speed-based measurement start triggered! Speed:', newSpeed.toFixed(2), 'km/h');
       setWaitingForAcceleration(false);
       waitingForAccelerationRef.current = false;
@@ -106,9 +106,9 @@ const SpeedSnap: React.FC = () => {
       });
     }
     
-    // Only start the timer when we're running AND have meaningful speed (>1 km/h)
-    if (isRunning && newSpeed > 1 && !startTimeRef.current) {
-      console.log('⏰ Starting timer - meaningful speed detected:', newSpeed.toFixed(2), 'km/h');
+    // Start the timer immediately when we're running AND have any speed > 0 (fixed from >1 km/h)
+    if (isRunning && newSpeed > 0 && !startTimeRef.current) {
+      console.log('⏰ Starting timer immediately - speed detected:', newSpeed.toFixed(2), 'km/h');
       startTimeRef.current = performance.now();
     }
     
@@ -281,7 +281,7 @@ const SpeedSnap: React.FC = () => {
       halfMile: null,
     });
     setHasResults(false);
-    setGpsStatus('Waiting for acceleration... (>0.5 m/s²)');
+    setGpsStatus('Waiting for acceleration... (>2.5 m/s²)');
 
     console.log('📍 Starting GPS tracking while waiting for acceleration');
     // Start GPS tracking to monitor speed while waiting
@@ -293,7 +293,7 @@ const SpeedSnap: React.FC = () => {
 
     toast({
       title: "Ready to Start",
-      description: "Accelerate to begin measurement (>0.5 m/s²)",
+      description: "Accelerate to begin measurement (>2.5 m/s²)",
     });
   }, [isRunning, waitingForAcceleration, startGPSTracking, requestGPSPermission]);
 

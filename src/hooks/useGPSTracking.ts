@@ -157,7 +157,7 @@ export const useGPSTracking = ({
           position.coords.latitude, position.coords.longitude
         );
         const dt = (timestamp - lastTimestampRef.current) / 1000;
-        if (dt > 0.5 && dt < 10) { // Only use if reasonable time difference
+        if (dt > 0.2 && dt < 10) { // Reduced from 0.5s to 0.2s for better walking speed detection
           const calculatedSpeed = distance / dt;
           console.log('Position-based speed:', calculatedSpeed, 'm/s', 'distance:', distance.toFixed(2), 'dt:', dt.toFixed(2));
           speedMs = calculatedSpeed;
@@ -185,7 +185,13 @@ export const useGPSTracking = ({
       longitude: position.coords.longitude
     };
     
-    const speedKmh = speedMs * 3.6; // Convert m/s to km/h
+    let speedKmh = speedMs * 3.6; // Convert m/s to km/h
+    
+    // Apply low-pass filter for walking speeds - set to 0 if below 5 km/h to filter GPS noise
+    if (speedKmh < 5) {
+      speedKmh = 0;
+      console.log('Speed filtered out as noise (< 5 km/h)');
+    }
     
     // Apply real-time outlier detection (but still store the point)
     const recentPoints = dataPointsRef.current.slice(-10); // Last 10 points for context
