@@ -1,7 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<resources>
-    <string name="app_name">speed-snap-pro</string>
-    <string name="title_activity_main">speed-snap-pro</string>
-    <string name="package_name">com.speedsnap.pro</string>
-    <string name="custom_url_scheme">com.speedsnap.pro</string>
-</resources>
