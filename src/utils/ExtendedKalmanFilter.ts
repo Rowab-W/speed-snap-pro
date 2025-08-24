@@ -7,18 +7,17 @@ export class ExtendedKalmanFilter {
   constructor() {
     this.x = [0, 0]; // [speed (km/h), acceleration (m/s²)]
     this.P = [[1, 0], [0, 1]]; // Initial covariance
-    this.Q = [[0.005, 0], [0, 0.01]]; // Process noise
-    this.R = [[0.1, 0], [0, 0.05]]; // Measurement noise
+    this.Q = [[0.001, 0], [0, 0.005]]; // Reduced process noise
+    this.R = [[0.5, 0], [0, 0.2]]; // Higher measurement noise for GPS
   }
 
   predict(dt: number): void {
-    // Predict next state
-    // speed += acceleration * dt * 3.6 (convert m/s to km/h)
-    this.x[0] += this.x[1] * dt * 3.6;
+    // Conservative prediction - don't accumulate speed, just update covariance
+    // This prevents speed drift from accumulating accelerometer errors
     
-    // Update covariance matrix
-    this.P[0][0] += this.Q[0][0];
-    this.P[1][1] += this.Q[1][1];
+    // Update covariance matrix with smaller process noise
+    this.P[0][0] += this.Q[0][0] * dt;
+    this.P[1][1] += this.Q[1][1] * dt;
   }
 
   update(measurement: number[]): number {
