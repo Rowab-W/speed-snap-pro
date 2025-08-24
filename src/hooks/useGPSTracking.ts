@@ -41,10 +41,12 @@ export const useGPSTracking = ({
   onGpsAccuracyUpdate
 }: UseGPSTrackingProps) => {
   const [gpsStatus, setGpsStatus] = useState<string>('Requesting permissions...');
+  const [gpsHz, setGpsHz] = useState<number | null>(null);
   const watchIdRef = useRef<number | null>(null);
   const lastTimestampRef = useRef<number | null>(null);
   const lastPositionRef = useRef<{ latitude: number; longitude: number } | null>(null);
   const dataPointsRef = useRef<DataPoint[]>([]);
+  const rateTimestampsRef = useRef<number[]>([]);
   
   // Data processing filters
   const savitzkyGolay = useRef(new SavitzkyGolayFilter());
@@ -118,6 +120,19 @@ export const useGPSTracking = ({
 
   const handlePosition = useCallback((position: GeolocationPosition) => {
     console.log('📍 GPS position received. Running:', isRunning, 'StartTime:', startTime);
+    
+    // Calculate GPS update rate (Hz)
+    const currentTime = Date.now();
+    rateTimestampsRef.current.push(currentTime);
+    if (rateTimestampsRef.current.length > 10) {
+      rateTimestampsRef.current.shift(); // Keep only last 10 timestamps
+    }
+    
+    if (rateTimestampsRef.current.length >= 2) {
+      const timeSpan = (rateTimestampsRef.current[rateTimestampsRef.current.length - 1] - rateTimestampsRef.current[0]) / 1000;
+      const hz = timeSpan > 0 ? (rateTimestampsRef.current.length - 1) / timeSpan : 0;
+      setGpsHz(hz);
+    }
     
     // Filter out readings with poor accuracy (>15m)
     const accuracy = position.coords.accuracy;
@@ -304,11 +319,14 @@ export const useGPSTracking = ({
     lastTimestampRef.current = null;
     lastPositionRef.current = null;
     dataPointsRef.current = [];
+    rateTimestampsRef.current = [];
+    setGpsHz(null);
     setGpsStatus('Ready to measure');
   }, [stopGPSTracking]);
 
   return {
     gpsStatus,
+    gpsHz,
     requestGPSPermission,
     startGPSTracking,
     stopGPSTracking,

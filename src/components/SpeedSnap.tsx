@@ -136,6 +136,7 @@ const SpeedSnap: React.FC = () => {
   // Initialize GPS tracking hook
   const {
     gpsStatus,
+    gpsHz,
     requestGPSPermission,
     startGPSTracking,
     stopGPSTracking,
@@ -640,6 +641,22 @@ const SpeedSnap: React.FC = () => {
     animate();
   }, [isRunning, waitingForAcceleration, times, stopMeasurement]);
 
+  // Compose UI status string with GPS metrics
+  const uiStatus = (() => {
+    let baseStatus = gpsStatus;
+    
+    // Show "Armed: waiting for movement" when appropriate
+    if (waitingForAcceleration && !isRunning) {
+      baseStatus = "Armed: waiting for movement";
+    }
+    
+    // Append GPS metrics when available
+    const accuracyText = gpsAccuracy !== null ? `±${gpsAccuracy.toFixed(0)}m` : '±—m';
+    const hzText = gpsHz !== null ? `${gpsHz.toFixed(1)} Hz` : '— Hz';
+    
+    return `${baseStatus} • GPS ${accuracyText} • ${hzText}`;
+  })();
+
   return (
     <div className="min-h-screen bg-gradient-background p-4">
       <div className="max-w-md mx-auto space-y-6">
@@ -674,7 +691,7 @@ const SpeedSnap: React.FC = () => {
         <MeasurementDisplay 
           speed={speed}
           elapsedTime={elapsedTime}
-          status={gpsStatus}
+          status={uiStatus}
           isRunning={isRunning}
         />
 
